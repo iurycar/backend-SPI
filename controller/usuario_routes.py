@@ -16,6 +16,8 @@ def login():
 
     user = service.login(user_email, user_password)
 
+    print(f"Dados recebidos: {data}")
+
     if user:
         session['user_id'] = user.id
         return jsonify({'message': 'Login successful'}), 200

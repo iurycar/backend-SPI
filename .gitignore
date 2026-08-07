@@ -4,3 +4,4 @@ controller/__pycache__
 models/__pycache__
 repository/__pycache__
 services/__pycache__
+assets/inserções_spi-postgres.sql
