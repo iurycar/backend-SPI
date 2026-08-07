@@ -16,23 +16,16 @@ class UsuarioService:
             return None
 
     def check_password(self, password: str, hashed_password: str | bytes) -> bool:
-
-        # Transformar a senha em hash com salt usando bcrypt
-        # ==== !! RETIRAR DAQUI !! ====
-        password = self.hashPassword(password)
-        hashed_password = self.hashPassword(hashed_password)
-        # ==== !! ATÉ AQUI !! ====
-
-        password = password.encode('utf-8')
+        password_bytes = password.encode("utf-8")
 
         if isinstance(hashed_password, str):
-            hashed_password = hashed_password.encode('utf-8')
+            hashed_password = hashed_password.encode("utf-8")
 
-        return bcrypt.checkpw(password, hashed_password)
+        return bcrypt.checkpw(password_bytes, hashed_password)
 
     # Função para gerar o hash da senha com salt usando bcrypt
     # Pode retirar
-    def hashPassword(self, password: str) -> str:
+    def hash_password(self, password: str) -> str:
         # Converte a senha de string para bytes
         password_bytes = password.encode('utf-8')
         

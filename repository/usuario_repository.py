@@ -1,9 +1,9 @@
 from models.usuarios import Usuario
 
 usuarios_teste = [
-    Usuario(1, "Alice", "alice@example.com", "password123", "user", False), 
-    Usuario(2, "Bob", "bob@example.com", "password456", "admin", True),
-    Usuario(3, "Administrador", "admin@visaoepi.com", "123456", "admin", True),
+    Usuario(1, "Alice", "alice@example.com", "$2b$12$6zF3X0GDZgeFpL7NuGKt/esQFh6we93ZqbPwEn8q76r4ZSHc4l9Zi", "user", False), 
+    Usuario(2, "Bob", "bob@example.com", "$2b$12$6zF3X0GDZgeFpL7NuGKt/esQFh6we93ZqbPwEn8q76r4ZSHc4l9Zi", "admin", True),
+    Usuario(3, "Administrador", "admin@visaoepi.com", "$2b$12$6zF3X0GDZgeFpL7NuGKt/esQFh6we93ZqbPwEn8q76r4ZSHc4l9Zi", "admin", True),
     ]
 
 class UsuarioRepository:
