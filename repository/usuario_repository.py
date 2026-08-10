@@ -16,3 +16,9 @@ class UsuarioRepository:
                 return usuario
 
         return None
+
+    def criar_usuario(self, email: str, hashed_password: str, nome: str, sobrenome: str, perfil: str, unidade: str = None, telefone: str = None) -> Usuario:
+        novo_id = len(self.usuarios) + 1
+        novo_usuario = Usuario(novo_id, nome, sobrenome, unidade, telefone, email, hashed_password, perfil, False)
+        self.usuarios.append(novo_usuario)
+        return novo_usuario

@@ -2,20 +2,20 @@
 class Usuario:
     def __init__(
             self, id: int, 
-            name: str, 
-            last_name: str | None,
+            nome: str, 
+            sobrenome: str | None,
             email: str, 
             password: str,
-            role: str,
+            perfil: str,
             admin: bool = False
             ):
 
         self.id = id
-        self.name = name
-        self.last_name = last_name
+        self.nome = nome
+        self.sobrenome = sobrenome
         self.email = email
         self.password = password
-        self.role = role
+        self.perfil = perfil
         self.admin = admin
 
     def get_id(self) -> int | None:
