@@ -1,5 +1,6 @@
+from dataclasses import dataclass
 
+@dataclass
 class Setor:
-    def __init__(self, id: int, nome: str):
-        self.id = id
-        self.nome = nome
+    id: int
+    nome: str

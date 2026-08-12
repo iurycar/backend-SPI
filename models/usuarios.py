@@ -38,3 +38,4 @@ class Usuario:
 
     def is_admin(self) -> bool:
         return self.admin
+    
