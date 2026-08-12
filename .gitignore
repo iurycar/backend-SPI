@@ -2,7 +2,9 @@
 .env
 connection/__pycache__
 controller/__pycache__
+core/__pycache__
 models/__pycache__
 repository/__pycache__
+schemas/__pycache__
 services/__pycache__
 assets/inserções_spi-postgres.sql
