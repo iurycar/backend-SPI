@@ -1,28 +1,17 @@
+from dataclasses import dataclass
 
+@dataclass
 class Usuario:
-    def __init__(
-            self, id: int, 
-            nome: str, 
-            sobrenome: str | None,
-            email: str, 
-            password: str,
-            perfil: str,
-            admin: bool = False,
-            unidade: str | None = None,
-            telefone: str | None = None,
-            ativo: bool = True
-            ):
-
-        self.id = id
-        self.nome = nome
-        self.sobrenome = sobrenome
-        self.email = email
-        self.password = password
-        self.perfil = perfil
-        self.admin = admin
-        self.unidade = unidade
-        self.telefone = telefone
-        self.ativo = ativo
+    id: int
+    nome: str
+    sobrenome: str | None
+    email: str
+    password: str
+    perfil: str
+    admin: bool = False
+    unidade: str | None = None
+    telefone: str | None = None
+    ativo: bool = True
 
     def get_id(self) -> int | None:
         return self.id
