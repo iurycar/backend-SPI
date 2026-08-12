@@ -4,8 +4,10 @@ from datetime import timedelta
 from flask_cors import CORS
 import os
 
-from controller.epi_routes import epi_bp
-from controller.usuario_routes import user_bp
+from connection.conn import Connection
+
+from controller.epi_routes import create_epi_bp
+from controller.usuario_routes import create_user_bp
 
 load_dotenv()  # Carrega as variáveis de ambiente do arquivo .env
 
@@ -32,8 +34,10 @@ else:
 # Habilita CORS para permitir solicitações de diferentes origens, incluindo credenciais (cookies)
 CORS(app, supports_credentials=True)
 
-app.register_blueprint(epi_bp)
-app.register_blueprint(user_bp)
+conn = Connection()
+
+app.register_blueprint(create_user_bp(conn.get_connection()))
+app.register_blueprint(create_epi_bp(conn.get_connection()))
 
 if __name__ == '__main__':
     app.run(debug=True)

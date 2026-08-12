@@ -1,5 +1,8 @@
 
 class EpiRepository:
+    def __init__(self, connection):
+        self.conn = connection
+
     def listar_epis(self) -> list[dict]:
         # Simulação de dados de EPIs
         return [

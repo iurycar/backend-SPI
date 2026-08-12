@@ -7,7 +7,10 @@ class Usuario:
             email: str, 
             password: str,
             perfil: str,
-            admin: bool = False
+            admin: bool = False,
+            unidade: str | None = None,
+            telefone: str | None = None,
+            ativo: bool = True
             ):
 
         self.id = id
@@ -17,6 +20,9 @@ class Usuario:
         self.password = password
         self.perfil = perfil
         self.admin = admin
+        self.unidade = unidade
+        self.telefone = telefone
+        self.ativo = ativo
 
     def get_id(self) -> int | None:
         return self.id
