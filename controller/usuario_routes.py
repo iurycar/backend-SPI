@@ -1,5 +1,7 @@
 from flask import Blueprint, jsonify, request, session
 from services.usuario_service import UsuarioService
+import schemas.usuario_dto as usuario_dto
+from core.errors import ValidationError
 
 def create_user_bp(connection):
     user_bp = Blueprint('user_bp', __name__)
@@ -9,19 +11,21 @@ def create_user_bp(connection):
     def login():
         data = request.get_json()
 
-        user_email = data.get('email')
-        user_password = data.get('password')
+        try:    
+            login_dto = usuario_dto.LoginDTO.from_dict(data)
 
-        user = service.login(user_email, user_password)
+            user = service.login(login_dto.email, login_dto.password)
 
-        print(f"Dados recebidos: {data}")
-
-        if user:
-            session['user_id'] = user.id
-            return jsonify({'message': 'Login successful'}), 200
-        else:
-            return jsonify({'message': 'Invalid email or password'}), 401
-
+            if user:
+                session['user_id'] = user.id
+                return jsonify({'message': 'Login successful'}), 200
+            else:
+                return jsonify({'message': 'Invalid email or password'}), 401
+            
+        except ValidationError as e:
+            return jsonify({'message': str(e)}), 400
+        except Exception as e:
+            return jsonify({'message': 'Erro interno do servidor'}), 500
 
     @user_bp.route('/logout', methods=['POST'])
     def logout():
@@ -33,29 +37,28 @@ def create_user_bp(connection):
     def signup():
         data = request.get_json()
 
-        user_email = data.get('email')
-        user_password = data.get('password')
-        user_nome = data.get('nome')
-        user_sobrenome = data.get('sobrenome')
-        user_perfil = data.get('perfil')
-        user_unidade = data.get('unidade')
-        user_telefone = data.get('telefone')
-        user_admin = data.get('admin', False)
+        try:
+            signup_dto = usuario_dto.SignupDTO.from_dict(data)
+            user = service.signup(
+                signup_dto.email, 
+                signup_dto.password, 
+                signup_dto.nome, 
+                signup_dto.sobrenome, 
+                signup_dto.perfil, 
+                signup_dto.unidade, 
+                signup_dto.telefone, 
+                False
+            )
 
-        user = service.signup(
-            user_email, 
-            user_password, 
-            user_nome, 
-            user_sobrenome, 
-            user_perfil, 
-            user_unidade, 
-            user_telefone, 
-            user_admin
-        )
 
-        if user:
-            return jsonify({'message': 'Signup successful'}), 201
-        else:
-            return jsonify({'message': 'Email already exists'}), 400
+            if user:
+                return jsonify({'message': 'Signup successful'}), 201
+            else:
+                return jsonify({'message': 'Email already exists'}), 400
+
+        except ValidationError as e:
+            return jsonify({'message': str(e)}), 400
+        except Exception as e:
+            return jsonify({'message': 'Erro interno do servidor'}), 500
 
     return user_bp
