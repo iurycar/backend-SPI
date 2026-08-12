@@ -1,13 +1,13 @@
-from flask import Flask, request, jsonify, Blueprint, session
 from dotenv import load_dotenv
 from datetime import timedelta
 from flask_cors import CORS
+from flask import Flask
 import os
 
-from connection.conn import Connection
-
-from controller.epi_routes import create_epi_bp
 from controller.usuario_routes import create_user_bp
+from controller.epi_routes import create_epi_bp
+
+from connection.conn import Connection
 
 load_dotenv()  # Carrega as variáveis de ambiente do arquivo .env
 
@@ -34,6 +34,7 @@ else:
 # Habilita CORS para permitir solicitações de diferentes origens, incluindo credenciais (cookies)
 CORS(app, supports_credentials=True)
 
+# Cria a classe conexão, para ser passada para os blueprints
 conn = Connection()
 
 app.register_blueprint(create_user_bp(conn.get_connection()))

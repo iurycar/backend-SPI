@@ -21,5 +21,4 @@ class Connection:
         )
 
     def get_connection(self):
-        print(f"Conexão com o banco de dados estabelecida: {self.conn}")
         return self.conn
