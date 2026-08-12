@@ -5,11 +5,19 @@ class EpiService:
         self.epi_repository = EpiRepository(connection)
 
     def listar_epis(self) -> list[dict]:
-        epis = self.epi_repository.listar_epis()
+        epis = self.epi_repository.get_epis()
 
-        epis_validos: list[dict] = []
+        epis_lista: list[dict] = []
+        
         for epi in epis:
-            if epi['estoque'] >= 0:
-                epis_validos.append(epi)
+            epi_dict = {
+                'id': epi[0],
+                'nome': epi[1],
+                'categoria': epi[2],
+                'validade': epi[3],
+                'estoque': epi[4]
+            }
 
-        return epis_validos
+            epis_lista.append(epi_dict)
+
+        return epis_lista

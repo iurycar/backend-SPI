@@ -35,8 +35,23 @@ def create_user_bp(connection):
 
         user_email = data.get('email')
         user_password = data.get('password')
+        user_nome = data.get('nome')
+        user_sobrenome = data.get('sobrenome')
+        user_perfil = data.get('perfil')
+        user_unidade = data.get('unidade')
+        user_telefone = data.get('telefone')
+        user_admin = data.get('admin', False)
 
-        user = service.signup(user_email, user_password)
+        user = service.signup(
+            user_email, 
+            user_password, 
+            user_nome, 
+            user_sobrenome, 
+            user_perfil, 
+            user_unidade, 
+            user_telefone, 
+            user_admin
+        )
 
         if user:
             return jsonify({'message': 'Signup successful'}), 201
