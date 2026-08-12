@@ -7,18 +7,29 @@ usuarios_teste = [
     ]
 
 class UsuarioRepository:
-    def __init__(self):
-        self.usuarios = usuarios_teste
-
+    def __init__(self, connection):
+        self.conn = connection
+    
     def get_usuario_por_email(self, email: str) -> Usuario | None:
-        for usuario in self.usuarios:
-            if usuario.get_email() == email:
-                return usuario
+        busca = "SELECT * FROM usuarios WHERE email = %s"
 
-        return None
+        with self.conn.cursor() as cursor:
+            cursor.execute(busca, (email,))
+            resultado = cursor.fetchone()
 
+            print(f"Resultado da consulta para email '{email}': {resultado}")
+
+            if resultado:
+                id, nome, sobrenome, email, password, perfil, admin = resultado
+                return Usuario(id, nome, sobrenome, email, password, perfil, admin)
+            else:
+                return None
+        
     def criar_usuario(self, email: str, hashed_password: str, nome: str, sobrenome: str, perfil: str, unidade: str = None, telefone: str = None) -> Usuario:
-        novo_id = len(self.usuarios) + 1
-        novo_usuario = Usuario(novo_id, nome, sobrenome, unidade, telefone, email, hashed_password, perfil, False)
-        self.usuarios.append(novo_usuario)
-        return novo_usuario
+        with self.conn.cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO usuarios (email, password, nome, sobrenome, perfil, unidade, telefone) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                (email, hashed_password, nome, sobrenome, perfil, unidade, telefone)
+            )
+            novo_id = cursor.fetchone()[0]
+        return Usuario(novo_id, nome, sobrenome, email, hashed_password, perfil, False) 

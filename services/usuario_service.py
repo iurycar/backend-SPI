@@ -2,8 +2,8 @@ from repository.usuario_repository import UsuarioRepository
 import bcrypt
 
 class UsuarioService:
-    def __init__(self, user_repository: UsuarioRepository):
-        self.user_repository = user_repository
+    def __init__(self):
+        self.user_repository = UsuarioRepository()
 
     def login(self, email: str, password: str):
         usuario = self.user_repository.get_usuario_por_email(email)

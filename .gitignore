@@ -1,5 +1,6 @@
 .venv
 .env
+connection/__pycache__
 controller/__pycache__
 models/__pycache__
 repository/__pycache__

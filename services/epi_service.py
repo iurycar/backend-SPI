@@ -1,7 +1,8 @@
+from repository.epi_repository import EpiRepository
 
 class EpiService:
-    def __init__(self, epi_repository):
-        self.epi_repository = epi_repository
+    def __init__(self):
+        self.epi_repository = EpiRepository()
 
     def listar_epis(self) -> list[dict]:
         epis = self.epi_repository.listar_epis()
