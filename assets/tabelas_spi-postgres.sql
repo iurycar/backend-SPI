@@ -47,7 +47,9 @@ CREATE TABLE epis (
 	categoria		VARCHAR(45)	NOT NULL,
 	certificado		VARCHAR(45)	NOT NULL,
 	validade		VARCHAR(45)	NOT NULL,
-	estoque			VARCHAR(45)	NOT NULL
+	estoque			VARCHAR(45)	NOT NULL,
+	quantidade_min  INTEGER		NOT NULL,
+	em_uso			INTEGER		NOT NULL
 );
 
 CREATE TABLE monitorar (
