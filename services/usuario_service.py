@@ -1,5 +1,5 @@
 from repository.usuario_repository import UsuarioRepository
-import bcrypt
+import core.security as security
 
 class UsuarioService:
     def __init__(self, connection):
@@ -10,7 +10,7 @@ class UsuarioService:
 
         print(f"Usuario encontrado: {usuario.get_email() if usuario else 'Nenhum usuário encontrado'}")
 
-        if usuario and self.check_password(password, usuario.get_password()):
+        if usuario and security.check_password(password, usuario.get_password()):
             return usuario
         else:
             return None
@@ -21,31 +21,8 @@ class UsuarioService:
         if usuario_existente:
             return None
 
-        hashed_password = self.hash_password(password)
+        hashed_password = security.hash_password(password)
 
         novo_usuario = self.user_repository.criar_usuario(email, hashed_password, nome, sobrenome, perfil, unidade, telefone)
 
         return novo_usuario
-    
-    def check_password(self, password: str, hashed_password: str | bytes) -> bool:
-        password_bytes = password.encode("utf-8")
-
-        if isinstance(hashed_password, str):
-            hashed_password = hashed_password.encode("utf-8")
-
-        return bcrypt.checkpw(password_bytes, hashed_password)
-
-    # Função para gerar o hash da senha com salt usando bcrypt
-    # Pode retirar
-    def hash_password(self, password: str) -> str:
-        # Converte a senha de string para bytes
-        password_bytes = password.encode('utf-8')
-        
-        # Gera um salt e faz o hash da senha
-        salt_password = bcrypt.hashpw(password_bytes, bcrypt.gensalt(rounds=12))
-
-        # Converte o hash de bytes para string antes de armazenar
-        password_string = salt_password.decode('utf-8')
-        #print(f"Hash gerado (string): {password_string}")
-
-        return password_string
