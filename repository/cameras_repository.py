@@ -55,3 +55,26 @@ class CamerasRepository:
                 return cameras_lista
 
             return None
+
+    def registrar_camera(self, ip: str, id_setor: int) -> Camera | None:
+        with self.conn.cursor() as cursor:
+            try:
+                cursor.execute(
+                    "INSERT INTO cameras (ip, id_setor) VALUES (%s, %s) RETURNING *",
+                    (ip, id_setor)
+                )
+                self.conn.commit()
+                camera = cursor.fetchone()
+
+                if camera:
+                    return Camera(
+                        id=camera[0],
+                        ip=camera[1],
+                        id_setor=camera[2]
+                    )
+
+            except Exception as e:
+                print(f"Erro ao registrar câmera: {e}")
+                self.conn.rollback()
+
+        return None

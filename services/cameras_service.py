@@ -1,4 +1,5 @@
 from repository.cameras_repository import CamerasRepository
+from schemas.camera_dto import CameraDTO
 
 class CamerasService:
     def __init__(self, connection):
@@ -46,3 +47,21 @@ class CamerasService:
                 cameras_lista.append(camera_dict)
 
         return cameras_lista
+
+    def registrar_camera(self, data: dict) -> dict | None:
+        try:
+            camera_dto = CameraDTO.from_dict(data)
+        except ValueError as e:
+            print(f"Erro ao criar CameraDTO: {e}")
+            return None
+        
+        camera = self.cameras_repository.registrar_camera(camera_dto.ip, camera_dto.id_setor)
+
+        if camera:
+            return {
+                'id': camera.id,
+                'ip': camera.ip,
+                'id_setor': camera.id_setor
+            }
+
+        return None

@@ -35,7 +35,7 @@ CREATE TABLE responsabilidade (
 
 CREATE TABLE cameras (
 	id_camera		INTEGER 	GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-	ip				VARCHAR(15)	NOT NULL,
+	ip				VARCHAR(15)	UNIQUE,
 	id_setor		INTEGER 	NOT NULL	REFERENCES setores(id_setor) 		ON DELETE CASCADE
 );
 
@@ -58,7 +58,7 @@ CREATE TABLE epis (
 	estoque			INTEGER		NOT NULL,
 	quantidade_min	INTEGER		NOT NULL,
 	em_uso			INTEGER		NOT NULL
-);
+);a
 
 CREATE TABLE monitorar (
 	id_monitorar	INTEGER 	GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

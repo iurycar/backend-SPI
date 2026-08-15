@@ -37,4 +37,17 @@ def create_cameras_bp(connection):
         else:
             return jsonify({'message': 'Nenhuma zona encontrada para a câmera especificada'}), 404
 
+    @cameras_bp.route('/cameras/registrar', methods=['POST'])
+    def registrar_camera():
+        data = request.get_json()
+
+        print(f"Dados recebidos para registrar câmera: {data}")  # Log the received data
+
+        camera = cameras_service.registrar_camera(data)
+
+        if camera:
+            return jsonify(camera), 201
+        else:
+            return jsonify({'message': 'Falha ao registrar a câmera'}), 400
+
     return cameras_bp
