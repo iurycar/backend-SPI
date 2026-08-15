@@ -40,8 +40,8 @@ def find_camera():
 
 cam_idx, backend = find_camera()
 
-if cam_idx is None:
-    raise RuntimeError("❌ Nenhuma câmera disponível foi encontrada.")
+"""if cam_idx is None:
+    raise RuntimeError("❌ Nenhuma câmera disponível foi encontrada.")"""
 
 cap = cv2.VideoCapture(cam_idx, backend)
 
@@ -53,7 +53,7 @@ def get_last_results():
 def generate_frames():
     global last_results
 
-    while True:
+    """while True:
         ret, frame = cap.read()
 
         if not ret:
@@ -101,4 +101,4 @@ def generate_frames():
         yield (
             b'--frame\r\n'
             b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n'
-        )
+        )"""
