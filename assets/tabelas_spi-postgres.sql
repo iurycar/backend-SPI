@@ -1,23 +1,25 @@
-DROP TABLE IF EXISTS alertas 	CASCADE;
-DROP TABLE IF EXISTS monitorar	CASCADE;
-DROP TABLE IF EXISTS epis		CASCADE;
-DROP TABLE IF EXISTS zonas		CASCADE;
-DROP TABLE IF EXISTS cameras	CASCADE;
-DROP TABLE IF EXISTS setores	CASCADE;
-DROP TABLE IF EXISTS usuarios	CASCADE;
+DROP TABLE IF EXISTS responsabilidade 	CASCADE;
+DROP TABLE IF EXISTS alertas 			CASCADE;
+DROP TABLE IF EXISTS monitorar			CASCADE;
+DROP TABLE IF EXISTS epis				CASCADE;
+DROP TABLE IF EXISTS zonas				CASCADE;
+DROP TABLE IF EXISTS cameras			CASCADE;
+DROP TABLE IF EXISTS setores			CASCADE;
+DROP TABLE IF EXISTS usuarios			CASCADE;
 
 
 CREATE TABLE usuarios (
     id_usuario  	INTEGER 	GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     nome        	VARCHAR(40) NOT NULL,
     sobrenome   	VARCHAR(90) NOT NULL,
-    email       	VARCHAR(60) NOT NULL,
+    email       	VARCHAR(60) UNIQUE,
     senha       	VARCHAR(60) NOT NULL,
     perfil      	VARCHAR(20) NOT NULL,
     admin_      	BOOLEAN     NOT NULL DEFAULT FALSE,
     unidade     	VARCHAR(45),
     telefone    	VARCHAR(45),
-    ativo       	BOOLEAN     NOT NULL DEFAULT TRUE
+    ativo       	BOOLEAN     NOT NULL DEFAULT TRUE,
+	acesso			TIMESTAMP
 );
 
 CREATE TABLE setores (
@@ -25,20 +27,26 @@ CREATE TABLE setores (
 	nome			VARCHAR(45)
 );
 
+CREATE TABLE responsabilidade (
+	id_responsabilidade INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+	id_usuario		INTEGER		NOT NULL	REFERENCES usuarios(id_usuario)		ON DELETE CASCADE,
+	id_setor		INTEGER 	NOT NULL	REFERENCES setores(id_setor) 		ON DELETE CASCADE
+);
+
 CREATE TABLE cameras (
 	id_camera		INTEGER 	GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-	ip				VARCHAR(15),
-	id_setor		INTEGER 	NOT NULL	REFERENCES setores(id_setor) 	ON DELETE CASCADE
+	ip				VARCHAR(15)	NOT NULL,
+	id_setor		INTEGER 	NOT NULL	REFERENCES setores(id_setor) 		ON DELETE CASCADE
 );
 
 CREATE TABLE zonas (
 	id_zona			INTEGER 	GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-	nome			VARCHAR(20),
+	nome			VARCHAR(20)	NOT NULL DEFAULT 'Nome indefinido',
 	x1				INTEGER		NOT NULL,
 	y1				INTEGER		NOT NULL,
 	x2				INTEGER		NOT NULL,
 	y2				INTEGER		NOT NULL,
-	id_camera		INTEGER 	NOT NULL	REFERENCES cameras(id_camera)	ON DELETE CASCADE
+	id_camera		INTEGER 	NOT NULL	REFERENCES cameras(id_camera)		ON DELETE CASCADE
 );
 
 CREATE TABLE epis (
@@ -46,17 +54,17 @@ CREATE TABLE epis (
 	nome			VARCHAR(45)	NOT NULL,
 	categoria		VARCHAR(45)	NOT NULL,
 	certificado		VARCHAR(45)	NOT NULL,
-	validade		VARCHAR(45)	NOT NULL,
-	estoque			VARCHAR(45)	NOT NULL,
-	quantidade_min  INTEGER		NOT NULL,
+	validade		DATE		NOT NULL,
+	estoque			INTEGER		NOT NULL,
+	quantidade_min	INTEGER		NOT NULL,
 	em_uso			INTEGER		NOT NULL
 );
 
 CREATE TABLE monitorar (
 	id_monitorar	INTEGER 	GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-	id_zona			INTEGER 	NOT NULL	REFERENCES zonas(id_zona)		ON DELETE CASCADE,
-	id_camera		INTEGER 	NOT NULL	REFERENCES cameras(id_camera)	ON DELETE CASCADE,
-	id_epi			INTEGER 	NOT NULL	REFERENCES epis(id_epi)			ON DELETE CASCADE
+	id_zona			INTEGER 	NOT NULL	REFERENCES zonas(id_zona)			ON DELETE CASCADE,
+	id_camera		INTEGER 	NOT NULL	REFERENCES cameras(id_camera)		ON DELETE CASCADE,
+	id_epi			INTEGER 	REFERENCES epis(id_epi)							ON DELETE CASCADE
 );
 
 CREATE TABLE alertas (
@@ -64,5 +72,5 @@ CREATE TABLE alertas (
 	resolvido		BOOLEAN		NOT NULL	DEFAULT FALSE,
 	data_hora		TIMESTAMP	NOT NULL	DEFAULT	CURRENT_TIMESTAMP,
 	id_monitorar	INTEGER 	NOT NULL	REFERENCES monitorar(id_monitorar)	ON DELETE RESTRICT,
-	id_usuario		INTEGER 	REFERENCES usuarios(id_usuario)	ON DELETE SET NULL
+	id_usuario		INTEGER 	REFERENCES usuarios(id_usuario)					ON DELETE SET NULL
 );

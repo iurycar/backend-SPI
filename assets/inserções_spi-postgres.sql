@@ -26,9 +26,9 @@ INSERT INTO zonas (nome, x1, y1, x2, y2, id_camera) VALUES
 
 -- 5. POPULAR TABELA EPIS
 INSERT INTO epis (nome, categoria, certificado, validade, estoque, quantidade_min, em_uso) VALUES
-('Capacete de Segurança H-700', 'Capacete', 'CA-12345', '2027-12-31', 50, 10, 5),
-('Óculos de Proteção Incolor', 'Óculos', 'CA-67890', '2026-10-15', 120, 20, 15),
-('Máscara de Solda Automática', 'Máscara', 'CA-11223', '2028-05-20', 15, 5, 3);
+('Capacete de Segurança H-700', 'Proteção de Cabeça', 'CA-12345', '2027-12-31', 50, 5, 6),
+('Óculos de Proteção Incolor', 'Proteção Visual', 'CA-67890', '2026-10-15', 120, 12, 4),
+('Máscara de Solda Automática', 'Proteção Facial/Solda', 'CA-11223', '2028-05-20', 15, 3, 8);
 
 -- 6. POPULAR TABELA MONITORAR (Depende de zonas, cameras e epis)
 -- Regras de monitoramento ativas no sistema
@@ -44,4 +44,9 @@ INSERT INTO alertas (resolvido, data_hora, id_monitorar, id_usuario) VALUES
 (FALSE, CURRENT_TIMESTAMP - INTERVAL '30 minutes', 2, 1), -- Alerta pendente
 (FALSE, CURRENT_TIMESTAMP - INTERVAL '5 minutes', 3, 2);  -- Alerta recente atribuído à Ana
 
-SELECT * FROM usuarios;
+INSERT INTO responsabilidade (id_usuario, id_setor) VALUES
+(1, 1), (1, 2), (1, 3), -- Usuário de ID 1 é responsável pelo setores 1, 2 e 3
+(2, 1), (2, 2), (2, 3), -- Usuário de ID 2 é responsável pelo setores 1, 2 e 3
+(3, 1), (3, 2), (3, 3); -- Usuário de ID 3 é responsável pelo setores 1, 2 e 3
+
+select * from usuarios;
