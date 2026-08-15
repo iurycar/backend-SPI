@@ -65,3 +65,21 @@ class CamerasService:
             }
 
         return None
+
+    def atualizar_camera(self, camera_id: int, data: dict) -> dict | None:
+        try:
+            camera_dto = CameraDTO.from_dict(data)
+        except ValueError as e:
+            print(f"Erro ao criar CameraDTO: {e}")
+            return None
+
+        camera = self.cameras_repository.atualizar_camera(camera_id, camera_dto.ip, camera_dto.id_setor)
+
+        if camera:
+            return {
+                'id': camera.id,
+                'ip': camera.ip,
+                'id_setor': camera.id_setor
+            }
+
+        return None

@@ -78,3 +78,26 @@ class CamerasRepository:
                 self.conn.rollback()
 
         return None
+
+    def atualizar_camera(self, camera_id: int, ip: str, id_setor: int) -> Camera | None:
+        with self.conn.cursor() as cursor:
+            try:
+                cursor.execute(
+                    "UPDATE cameras SET ip = %s, id_setor = %s WHERE id_camera = %s RETURNING *",
+                    (ip, id_setor, camera_id)
+                )
+                self.conn.commit()
+                camera = cursor.fetchone()
+
+                if camera:
+                    return Camera(
+                        id=camera[0],
+                        ip=camera[1],
+                        id_setor=camera[2]
+                    )
+
+            except Exception as e:
+                print(f"Erro ao atualizar câmera: {e}")
+                self.conn.rollback()
+
+        return None

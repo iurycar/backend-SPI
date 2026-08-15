@@ -50,4 +50,15 @@ def create_cameras_bp(connection):
         else:
             return jsonify({'message': 'Falha ao registrar a câmera'}), 400
 
+    @cameras_bp.route('/cameras/<int:camera_id>', methods=['PUT'])
+    def atualizar_camera(camera_id):
+        data = request.get_json()
+
+        camera = cameras_service.atualizar_camera(camera_id, data)
+
+        if camera:
+            return jsonify(camera), 200
+        else:
+            return jsonify({'message': 'Falha ao atualizar a câmera'}), 400
+
     return cameras_bp
