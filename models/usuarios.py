@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 
 @dataclass
 class Usuario:
@@ -51,4 +52,6 @@ class Usuario:
 
     def get_acesso(self) -> str | None:
         return self.acesso
-    
+
+    def set_acesso(self, acesso: datetime) -> None:
+        self.acesso = acesso

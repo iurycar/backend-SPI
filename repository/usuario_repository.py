@@ -16,9 +16,9 @@ class UsuarioRepository:
             if resultado:
                 print(f"Resultado da consulta para email '{email}': {resultado}")
 
-                id, nome, sobrenome, email, password, perfil, admin, unidade, telefone, ativo = resultado
+                id, nome, sobrenome, email, password, perfil, admin, unidade, telefone, ativo, acesso = resultado
 
-                return Usuario(id, nome, sobrenome, email, password, perfil, admin, unidade, telefone, ativo)
+                return Usuario(id, nome, sobrenome, email, password, perfil, admin, unidade, telefone, ativo, acesso)
             else:
                 return None
         
@@ -35,3 +35,10 @@ class UsuarioRepository:
             self.conn.commit()
 
         return Usuario(novo_id, nome, sobrenome, email, hashed_password, perfil, False) 
+
+    def atualizar_acesso(self, usuario_id: int, acesso) -> None:
+        update = "UPDATE usuarios SET acesso = %s WHERE id_usuario = %s"
+
+        with self.conn.cursor() as cursor:
+            cursor.execute(update, (acesso, usuario_id))
+            self.conn.commit()

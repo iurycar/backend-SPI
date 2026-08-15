@@ -1,16 +1,24 @@
 from repository.usuario_repository import UsuarioRepository
-import core.security as security
+from core.security import Security
+
+from datetime import datetime
 
 class UsuarioService:
     def __init__(self, connection):
         self.user_repository = UsuarioRepository(connection)
+        self.security = Security()
 
     def login(self, email: str, password: str):
         usuario = self.user_repository.get_usuario_por_email(email)
 
         print(f"Usuario encontrado: {usuario.get_email() if usuario else 'Nenhum usuário encontrado'}")
 
-        if usuario and security.check_password(password, usuario.get_password()):
+        if usuario and self.security.check_password(password, usuario.get_password()):
+            
+            # Atualiza a data do último login do usuário
+            usuario.set_acesso(datetime.now())
+            self.user_repository.atualizar_acesso(usuario.get_id(), usuario.get_acesso())
+
             return usuario
         else:
             return None
@@ -21,7 +29,7 @@ class UsuarioService:
         if usuario_existente:
             return None
 
-        hashed_password = security.hash_password(password)
+        hashed_password = self.security.hash_password(password)
 
         novo_usuario = self.user_repository.criar_usuario(email, hashed_password, nome, sobrenome, perfil, unidade, telefone)
 

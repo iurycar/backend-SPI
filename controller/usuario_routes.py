@@ -5,7 +5,7 @@ from core.errors import ValidationError
 
 def create_user_bp(connection):
     user_bp = Blueprint('user_bp', __name__)
-    service = UsuarioService(connection)
+    usuario_service = UsuarioService(connection)
 
     @user_bp.route('/login', methods=['POST'])
     def login():
@@ -14,10 +14,20 @@ def create_user_bp(connection):
         try:    
             login_dto = usuario_dto.LoginDTO.from_dict(data)
 
-            user = service.login(login_dto.email, login_dto.password)
+            user = usuario_service.login(login_dto.email, login_dto.password)
 
             if user:
                 session['user_id'] = user.id
+                session['user_email'] = user.email
+                session['user_perfil'] = user.perfil
+                session['user_nome'] = user.nome
+                session['user_sobrenome'] = user.sobrenome
+                session['user_unidade'] = user.unidade
+                session['user_telefone'] = user.telefone
+                session['user_admin'] = user.admin
+                session['user_ativo'] = user.ativo
+                session['user_acesso'] = user.acesso
+                
                 return jsonify({'message': 'Login successful'}), 200
             else:
                 return jsonify({'message': 'Invalid email or password'}), 401
@@ -39,7 +49,7 @@ def create_user_bp(connection):
 
         try:
             signup_dto = usuario_dto.SignupDTO.from_dict(data)
-            user = service.signup(
+            user = usuario_service.signup(
                 signup_dto.email, 
                 signup_dto.password, 
                 signup_dto.nome, 
