@@ -1,4 +1,5 @@
 from repository.epi_repository import EpiRepository
+from schemas.epi_dto import EpiDTO
 
 class EpiService:
     def __init__(self, connection):
@@ -42,3 +43,65 @@ class EpiService:
             }
         
         return None
+
+    def registrar_epi(self, data: dict) -> dict | None:
+        try:
+            epi_dto = EpiDTO.from_dict(data)
+        except ValueError as e:
+            print(f"Erro ao criar EpiDTO: {e}")
+            return None
+
+        epi = self.epi_repository.registrar_epi(
+            epi_dto.nome,
+            epi_dto.categoria,
+            epi_dto.validade,
+            epi_dto.estoque,
+            epi_dto.quantidade_min,
+            epi_dto.em_uso
+        )
+
+        if epi:
+            return {
+                'id': epi.id,
+                'nome': epi.nome,
+                'categoria': epi.categoria,
+                'validade': epi.validade,
+                'estoque': epi.estoque,
+                'quantidade_min': epi.quantidade_min,
+                'em_uso': epi.em_uso
+            }
+
+        return None
+
+    def atualizar_epi(self, epi_id: int, data: dict) -> dict | None:
+        try:
+            epi_dto = EpiDTO.from_dict(data)
+        except ValueError as e:
+            print(f"Erro ao criar EpiDTO: {e}")
+            return None
+
+        epi = self.epi_repository.atualizar_epi(
+            epi_id,
+            epi_dto.nome,
+            epi_dto.categoria,
+            epi_dto.validade,
+            epi_dto.estoque,
+            epi_dto.quantidade_min,
+            epi_dto.em_uso
+        )
+
+        if epi:
+            return {
+                'id': epi.id,
+                'nome': epi.nome,
+                'categoria': epi.categoria,
+                'validade': epi.validade,
+                'estoque': epi.estoque,
+                'quantidade_min': epi.quantidade_min,
+                'em_uso': epi.em_uso
+            }
+
+        return None
+
+    def deletar_epi(self, epi_id: int) -> bool:
+        return self.epi_repository.deletar_epi(epi_id)

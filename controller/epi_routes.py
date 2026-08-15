@@ -19,4 +19,33 @@ def create_epi_bp(connection):
         else:
             return jsonify({"error": "EPI não encontrado"}), 404
 
+    @epi_bp.route('/epis', methods=['POST'])
+    def registrar_epi():
+        data = request.get_json()
+        epi = epi_service.registrar_epi(data)
+
+        if epi:
+            return jsonify(epi), 201
+        else:
+            return jsonify({"error": "Falha ao registrar o EPI"}), 400
+
+    @epi_bp.route('/epis/<int:epi_id>', methods=['PUT'])
+    def atualizar_epi(epi_id):
+        data = request.get_json()
+        epi = epi_service.atualizar_epi(epi_id, data)
+
+        if epi:
+            return jsonify(epi), 200
+        else:
+            return jsonify({"error": "Falha ao atualizar o EPI"}), 400
+
+    @epi_bp.route('/epis/<int:epi_id>', methods=['DELETE'])
+    def deletar_epi(epi_id):
+        sucesso = epi_service.deletar_epi(epi_id)
+
+        if sucesso:
+            return jsonify({"message": "EPI deletado com sucesso"}), 200
+        else:
+            return jsonify({"error": "Falha ao deletar o EPI"}), 400
+        
     return epi_bp
