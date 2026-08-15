@@ -1,0 +1,48 @@
+from repository.cameras_repository import CamerasRepository
+
+class CamerasService:
+    def __init__(self, connection):
+        self.cameras_repository = CamerasRepository(connection)
+
+    def listar_cameras(self) -> list[dict]:
+        cameras = self.cameras_repository.get_cameras()
+
+        cameras_lista: list[dict] = []
+
+        for camera in cameras:
+            camera_dict = {
+                'id': camera.id,
+                'ip': camera.ip,
+                'id_setor': camera.id_setor
+            }
+            cameras_lista.append(camera_dict)
+
+        return cameras_lista
+
+    def obter_camera_por_id(self, camera_id: int) -> dict | None:
+        camera = self.cameras_repository.get_camera_por_id(camera_id)
+
+        if camera:
+            return {
+                'id': camera.id,
+                'ip': camera.ip,
+                'id_setor': camera.id_setor
+            }
+
+        return None
+
+    def obter_cameras_por_id_setor(self, setor_id: int) -> list[dict]:
+        cameras = self.cameras_repository.get_cameras_por_id_setor(setor_id)
+
+        cameras_lista: list[dict] = []
+
+        if cameras:
+            for camera in cameras:
+                camera_dict = {
+                    'id': camera.id,
+                    'ip': camera.ip,
+                    'id_setor': camera.id_setor
+                }
+                cameras_lista.append(camera_dict)
+
+        return cameras_lista
