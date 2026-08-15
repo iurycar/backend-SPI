@@ -83,3 +83,7 @@ class CamerasService:
             }
 
         return None
+
+    def deletar_camera(self, camera_id: int) -> bool:
+        successo = self.cameras_repository.deletar_camera(camera_id)
+        return successo

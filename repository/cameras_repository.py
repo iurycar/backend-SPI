@@ -101,3 +101,17 @@ class CamerasRepository:
                 self.conn.rollback()
 
         return None
+
+    def deletar_camera(self, camera_id: int) -> bool:
+        with self.conn.cursor() as cursor:
+            try:
+                cursor.execute("DELETE FROM cameras WHERE id_camera = %s", (camera_id,))
+                self.conn.commit()
+
+                return cursor.rowcount > 0
+            
+            except Exception as e:
+                print(f"Erro ao deletar câmera: {e}")
+                self.conn.rollback()
+
+                return False

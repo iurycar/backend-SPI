@@ -61,4 +61,13 @@ def create_cameras_bp(connection):
         else:
             return jsonify({'message': 'Falha ao atualizar a câmera'}), 400
 
+    @cameras_bp.route('/cameras/<int:camera_id>', methods=['DELETE'])
+    def deletar_camera(camera_id):
+        successo = cameras_service.deletar_camera(camera_id)
+
+        if successo:
+            return jsonify({'message': 'Câmera deletada com sucesso'}), 200
+        else:
+            return jsonify({'message': 'Falha ao deletar a câmera'}), 400
+
     return cameras_bp
