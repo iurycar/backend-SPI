@@ -3,7 +3,7 @@ from dataclasses import dataclass
 @dataclass
 class Zona:
     id: int
-    nome: str
+    nome: str | None
     id_camera: int
     x1: int = 0
     y1: int = 0

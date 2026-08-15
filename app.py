@@ -6,7 +6,7 @@ import os
 
 from controller.setores_routes import create_setores_bp
 from controller.usuario_routes import create_user_bp
-#from controller.zonas_routes import create_zonas_bp
+from controller.zonas_routes import create_zonas_bp
 from controller.epi_routes import create_epi_bp
 from controller.visao_routes import visao_bp
 
@@ -44,6 +44,7 @@ conn = Connection()
 app.register_blueprint(create_user_bp(conn.get_connection()))
 app.register_blueprint(create_epi_bp(conn.get_connection()))
 app.register_blueprint(create_setores_bp(conn.get_connection()))
+app.register_blueprint(create_zonas_bp(conn.get_connection()))
 app.register_blueprint(visao_bp)
 
 if __name__ == '__main__':

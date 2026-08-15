@@ -12,3 +12,4 @@ assets/modelo/images/val
 assets/modelo/labels/train
 assets/modelo/labels/val
 assets/modelo/test_camera.py
+core/validators.py
