@@ -17,7 +17,6 @@ class EpiDTO:
         if not isinstance(data, dict):
             raise ValueError("Payload invalid.")
 
-        id = data.get('id')
         nome = data.get('nome')
         categoria = data.get('categoria')
         certificado = data.get('certificado')
@@ -25,9 +24,6 @@ class EpiDTO:
         estoque = data.get('estoque')
         quantidade_min = data.get('quantidade_min')
         em_uso = data.get('em_uso')
-
-        if not isinstance(id, int):
-            raise ValueError("ID must be an integer.")
 
         if not isinstance(nome, str):
             raise ValueError("Nome must be a string.")

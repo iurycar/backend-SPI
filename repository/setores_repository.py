@@ -56,3 +56,43 @@ class SetoresRepository:
                 return setores_lista
 
             return None
+
+    def registrar_setor(self, nome: str) -> Setor | None:
+        with self.conn.cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO setores (nome) VALUES (%s) RETURNING *",
+                (nome,)
+            )
+            setor = cursor.fetchone()
+
+            if setor:
+                return Setor(
+                    id=setor[0],
+                    nome=setor[1]
+                )
+
+            return None
+
+    def atualizar_setor(self, setor_id: int, nome: str) -> Setor | None:
+        with self.conn.cursor() as cursor:
+            cursor.execute(
+                "UPDATE setores SET nome = %s WHERE id_setor = %s RETURNING *",
+                (nome, setor_id)
+            )
+            setor = cursor.fetchone()
+
+            if setor:
+                return Setor(
+                    id=setor[0],
+                    nome=setor[1]
+                )
+
+            return None
+
+    def deletar_setor(self, setor_id: int) -> bool:
+        with self.conn.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM setores WHERE id_setor = %s",
+                (setor_id,)
+            )
+            return cursor.rowcount > 0

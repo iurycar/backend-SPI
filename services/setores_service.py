@@ -1,4 +1,5 @@
 from repository.setores_repository import SetoresRepository
+from schemas.setor_dto import SetorDTO
 from flask import session
 
 class SetoresService:
@@ -45,4 +46,46 @@ class SetoresService:
                 setores_lista.append(setor_dict)
 
         return setores_lista
-    
+
+    def registrar_setor(self, data: dict) -> dict | None:
+        try:
+            setor_dto = SetorDTO.from_dict(data)
+        except ValueError as e:
+            print(f"Erro ao criar SetorDTO: {e}")
+            return None
+
+        setor = self.setores_repository.registrar_setor(
+            setor_dto.nome
+        )
+
+        if setor:
+            return {
+                'id': setor.id,
+                'nome': setor.nome
+            }
+
+        return None
+
+    def atualizar_setor(self, setor_id: int, data: dict) -> dict | None:
+        try:
+            setor_dto = SetorDTO.from_dict(data)
+        except ValueError as e:
+            print(f"Erro ao criar SetorDTO: {e}")
+            return None
+
+        setor = self.setores_repository.atualizar_setor(
+            setor_id,
+            setor_dto.nome
+        )
+
+        if setor:
+            return {
+                'id': setor.id,
+                'nome': setor.nome
+            }
+
+        return None
+
+    def deletar_setor(self, setor_id: int) -> bool:
+        sucesso = self.setores_repository.deletar_setor(setor_id)
+        return sucesso
