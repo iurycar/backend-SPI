@@ -33,8 +33,8 @@ Backend-SPI-2026/
 ├── controller/
 │    ├── __init__.py
 │    ├── epi_routes.py
-│    ├── usuario_routes.py
-│    └── visao_routes.py
+│    ├── ...
+│    └── zonas_routes.py
 ├── core/
 │    ├── __init__.py
 │    ├── errors.py
@@ -42,24 +42,21 @@ Backend-SPI-2026/
 │    └── validators.py
 ├── models/
 │    ├── __init__.py
-│    ├── alertas.py
-│    ├── cameras.py
-│    ├── epis.py
-│    ├── monitoramento.py
-│    ├── setores.py
-│    ├── usuarios.py
+│    ├── ...
 │    └── zonas.py
 ├── repository/
 │    ├── __init__.py
 │    ├── epi_repository.py
+│    ├── ...
+│    └── zonas_repository.py
 ├── schemas/
 │    ├── __init__.py
 │    └── usuario_dto.py
 ├── services/
 │    ├── __init__.py
 │    ├── epi_service.py
-│    ├── usuario_service.py
-│    └── visao_service.py
+│    ├── ...
+│    └── zonas_service.py
 ├── __init__.py
 ├── .env
 ├── app.py
@@ -86,3 +83,7 @@ O servidor estará disponível em `http://127.0.0.1:5000` e pronto para receber 
 - `/video` - Acessa o vídeo da visão
 - `/detections` - Retorna a lista de detecções
 
+### Zonas
+- `GET /zonas` - Lista todas as zonas
+- `GET /zonas/<int:zona_id>` - Obtém a zona por ID
+- `GET /zonas/camera/<int:camera_id>` - Lista as zonas por ID da câmera
