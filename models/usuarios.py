@@ -12,6 +12,7 @@ class Usuario:
     unidade: str | None = None
     telefone: str | None = None
     ativo: bool = True
+    acesso: str | None = None
 
     def get_id(self) -> int | None:
         return self.id
@@ -38,4 +39,16 @@ class Usuario:
 
     def is_admin(self) -> bool:
         return self.admin
+
+    def get_unidade(self) -> str | None:
+        return self.unidade
+
+    def get_telefone(self) -> str | None:
+        return self.telefone
+
+    def is_ativo(self) -> bool:
+        return self.ativo
+
+    def get_acesso(self) -> str | None:
+        return self.acesso
     
