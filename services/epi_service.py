@@ -8,16 +8,37 @@ class EpiService:
         epis = self.epi_repository.get_epis()
 
         epis_lista: list[dict] = []
-        
+
+        if not epis:
+            return []
+
         for epi in epis:
             epi_dict = {
-                'id': epi[0],
-                'nome': epi[1],
-                'categoria': epi[2],
-                'validade': epi[3],
-                'estoque': epi[4]
+                'id': epi.id,
+                'nome': epi.nome,
+                'categoria': epi.categoria,
+                'validade': epi.validade,
+                'estoque': epi.estoque,
+                'quantidade_min': epi.quantidade_min,
+                'em_uso': epi.em_uso
             }
 
             epis_lista.append(epi_dict)
 
         return epis_lista
+
+    def obter_epi_por_id(self, epi_id: int) -> dict | None:
+        epi = self.epi_repository.get_epi_por_id(epi_id)
+
+        if epi:
+            return {
+                'id': epi.id,
+                'nome': epi.nome,
+                'categoria': epi.categoria,
+                'validade': epi.validade,
+                'estoque': epi.estoque,
+                'quantidade_min': epi.quantidade_min,
+                'em_uso': epi.em_uso
+            }
+        
+        return None
