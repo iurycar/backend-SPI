@@ -1,10 +1,12 @@
 from services.cameras_service import CamerasService
+from services.zonas_service import ZonasService
 from flask import Blueprint, jsonify, request
 
 cameras_bp = Blueprint('cameras', __name__)
 
 def create_cameras_bp(connection):
     cameras_service = CamerasService(connection)
+    zonas_service = ZonasService(connection)
 
     @cameras_bp.route('/cameras', methods=['GET'])
     def listar_cameras():
@@ -26,5 +28,13 @@ def create_cameras_bp(connection):
             return jsonify(cameras), 200
         else:
             return jsonify({'message': 'Nenhuma câmera encontrada para o setor especificado'}), 404
+
+    @cameras_bp.route('/cameras/<int:camera_id>/zonas', methods=['GET'])
+    def listar_zonas_por_camera(camera_id):
+        zonas = zonas_service.listar_zonas_por_id_camera(camera_id)
+        if zonas:
+            return jsonify(zonas), 200
+        else:
+            return jsonify({'message': 'Nenhuma zona encontrada para a câmera especificada'}), 404
 
     return cameras_bp

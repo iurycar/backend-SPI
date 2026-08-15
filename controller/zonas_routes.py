@@ -1,5 +1,5 @@
-from flask import Blueprint, jsonify, request
 from services.zonas_service import ZonasService
+from flask import Blueprint, jsonify, request
 
 def create_zonas_bp(connection):
     zonas_service = ZonasService(connection)
@@ -18,10 +18,5 @@ def create_zonas_bp(connection):
             return jsonify(zona), 200
         else:
             return jsonify({"error": "Zona não encontrada"}), 404
-
-    @zonas_bp.route('/zonas/camera/<int:camera_id>', methods=['GET'])
-    def listar_zonas_por_id_camera(camera_id):
-        zonas = zonas_service.listar_zonas_por_id_camera(camera_id)
-        return jsonify(zonas), 200
 
     return zonas_bp
