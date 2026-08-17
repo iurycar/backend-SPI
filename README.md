@@ -77,6 +77,7 @@ O servidor estará disponível em `http://127.0.0.1:5000` e pronto para receber 
 ### EPIs
 
 - `GET /epis` - Lista as EPIs
+- `GET /epis/<id:int>` - Busca a EPI por ID
 
 ### Visão Computacional
 

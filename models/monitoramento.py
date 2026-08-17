@@ -6,5 +6,3 @@ class Monitoramento:
     id_camera: int
     id_zona: int
     id_epi: int
-    data_hora: str
-    resolvido: bool = False
