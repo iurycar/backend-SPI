@@ -41,24 +41,24 @@ CREATE TABLE cameras (
 
 CREATE TABLE zonas (
 	id_zona			INTEGER 	GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-	nome			VARCHAR(20)	NOT NULL DEFAULT 'Nome indefinido',
-	x1				INTEGER		NOT NULL,
-	y1				INTEGER		NOT NULL,
-	x2				INTEGER		NOT NULL,
-	y2				INTEGER		NOT NULL,
+	nome			VARCHAR(20)	NOT NULL DEFAULT 'Nome não definido',
+	x				INTEGER		NOT NULL,
+	y				INTEGER		NOT NULL,
+	largura			INTEGER		NOT NULL,
+	altura			INTEGER		NOT NULL,
 	id_camera		INTEGER 	NOT NULL	REFERENCES cameras(id_camera)		ON DELETE CASCADE
 );
 
 CREATE TABLE epis (
 	id_epi			INTEGER		GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 	nome			VARCHAR(45)	NOT NULL,
-	categoria		VARCHAR(45)	NOT NULL,
+	categoria		VARCHAR(12)	NOT NULL,
 	certificado		VARCHAR(45)	NOT NULL,
 	validade		DATE		NOT NULL,
 	estoque			INTEGER		NOT NULL,
 	quantidade_min	INTEGER		NOT NULL,
 	em_uso			INTEGER		NOT NULL
-);a
+);
 
 CREATE TABLE monitorar (
 	id_monitorar	INTEGER 	GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

@@ -18,24 +18,27 @@ INSERT INTO cameras (ip, id_setor) VALUES
 ('192.168.2.201', 3);
 
 -- 4. POPULAR TABELA ZONAS (Depende de cameras)
--- Coordenadas simuladas (x1, y1, x2, y2)
-INSERT INTO zonas (nome, x1, y1, x2, y2, id_camera) VALUES
+-- Coordenadas simuladas (x, y, largura, altura)
+INSERT INTO zonas (nome, x, y, largura, altura, id_camera) VALUES
 ('Entrada Principal', 10, 10, 100, 200, 1),
 ('Posto de Montagem 01', 120, 50, 300, 250, 1),
 ('Célula de Solda 01', 50, 50, 400, 400, 3);
 
 -- 5. POPULAR TABELA EPIS
 INSERT INTO epis (nome, categoria, certificado, validade, estoque, quantidade_min, em_uso) VALUES
-('Capacete de Segurança H-700', 'Proteção de Cabeça', 'CA-12345', '2027-12-31', 50, 5, 6),
-('Óculos de Proteção Incolor', 'Proteção Visual', 'CA-67890', '2026-10-15', 120, 12, 4),
-('Máscara de Solda Automática', 'Proteção Facial/Solda', 'CA-11223', '2028-05-20', 15, 3, 8);
+('Capacete de Segurança H-700', 'Capacete', 'CA-12345', '2027-12-31', 50, 5, 6),
+('Óculos de Proteção Incolor', 'Oculos', 'CA-67890', '2026-10-15', 120, 12, 4),
+('Máscara de Solda Automática', 'Mascara', 'CA-11223', '2028-05-20', 30, 5, 10),
+('Luva de Proteção', 'Luva', 'CA-11223', '2028-05-20', 15, 3, 8);
 
 -- 6. POPULAR TABELA MONITORAR (Depende de zonas, cameras e epis)
 -- Regras de monitoramento ativas no sistema
 INSERT INTO monitorar (id_zona, id_camera, id_epi) VALUES
-(1, 1, 1), -- Monitorar Capacete na Entrada Principal (Câmera 1)
-(2, 1, 2), -- Monitorar Óculos no Posto de Montagem 01 (Câmera 1)
-(3, 3, 3); -- Monitorar Máscara de Solda na Célula de Solda 01 (Câmera 3)
+(1, 1, 1),      -- Monitorar Capacete na Entrada Principal (Câmera 1)
+(2, 1, 2),      -- Monitorar Óculos no Posto de Montagem 01 (Câmera 1)
+(3, 1, 3),      -- Monitorar Máscara de Solda na Célula de Solda 01 (Câmera 3)
+(3, 1, 4),      -- Monitorar Luva de Proteção na Célula de Solda 01 (Câmera 3)
+(1, 1, NULL);   -- Monitorar presença de pessoas na Célula de Solda 01 (Câmera 3) sem EPI específico
 
 -- 7. POPULAR TABELA ALERTAS (Depende de monitorar e usuarios)
 -- Alertas gerados pelo sistema por falta de EPI
@@ -49,4 +52,11 @@ INSERT INTO responsabilidade (id_usuario, id_setor) VALUES
 (2, 1), (2, 2), (2, 3), -- Usuário de ID 2 é responsável pelo setores 1, 2 e 3
 (3, 1), (3, 2), (3, 3); -- Usuário de ID 3 é responsável pelo setores 1, 2 e 3
 
-select * from usuarios;
+SELECT * FROM usuarios;
+SELECT * FROM setores;
+SELECT * FROM cameras;
+SELECT * FROM zonas;
+SELECT * FROM epis;
+SELECT * FROM monitorar;
+SELECT * FROM alertas;
+SELECT * FROM responsabilidade;

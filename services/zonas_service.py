@@ -18,10 +18,10 @@ class ZonasService:
             zona_dict = {
                 'id': zona.id,
                 'nome': zona.nome,
-                'x1': zona.x1,
-                'y1': zona.y1,
-                'x2': zona.x2,
-                'y2': zona.y2,
+                'x': zona.x,
+                'y': zona.y,
+                'largura': zona.largura,
+                'altura': zona.altura,
                 'id_camera': zona.id_camera
             }
 
@@ -36,10 +36,10 @@ class ZonasService:
             return {
                 'id': zona.id,
                 'nome': zona.nome,
-                'x1': zona.x1,
-                'y1': zona.y1,
-                'x2': zona.x2,
-                'y2': zona.y2,
+                'x': zona.x,
+                'y': zona.y,
+                'largura': zona.largura,
+                'altura': zona.altura,
                 'id_camera': zona.id_camera
             }
 
@@ -55,10 +55,10 @@ class ZonasService:
                 zona_dict = {
                     'id': zona.id,
                     'nome': zona.nome,
-                    'x1': zona.x1,
-                    'y1': zona.y1,
-                    'x2': zona.x2,
-                    'y2': zona.y2,
+                    'x': zona.x,
+                    'y': zona.y,
+                    'largura': zona.largura,
+                    'altura': zona.altura,
                     'id_camera': zona.id_camera
                 }
                 zonas_lista.append(zona_dict)
@@ -74,21 +74,21 @@ class ZonasService:
 
         zona = self.zonas_repository.registrar_zona(
             zona_dto.nome,
-            zona_dto.x1,
-            zona_dto.y1,
-            zona_dto.x2,
-            zona_dto.y2,
-            zona_dto.id_camera
+            zona_dto.id_camera,
+            zona_dto.x,
+            zona_dto.y,
+            zona_dto.largura,
+            zona_dto.altura
         )
 
         if zona:
             return {
                 'id': zona.id,
                 'nome': zona.nome,
-                'x1': zona.x1,
-                'y1': zona.y1,
-                'x2': zona.x2,
-                'y2': zona.y2,
+                'x': zona.x,
+                'y': zona.y,
+                'largura': zona.largura,
+                'altura': zona.altura,
                 'id_camera': zona.id_camera
             }
 
@@ -104,10 +104,10 @@ class ZonasService:
         zona = self.zonas_repository.atualizar_zona(
             zona_id,
             zona_dto.nome,
-            zona_dto.x1,
-            zona_dto.y1,
-            zona_dto.x2,
-            zona_dto.y2,
+            zona_dto.x,
+            zona_dto.y,
+            zona_dto.largura,
+            zona_dto.altura,
             zona_dto.id_camera
         )
 
@@ -115,10 +115,10 @@ class ZonasService:
             return {
                 'id': zona.id,
                 'nome': zona.nome,
-                'x1': zona.x1,
-                'y1': zona.y1,
-                'x2': zona.x2,
-                'y2': zona.y2,
+                'x': zona.x,
+                'y': zona.y,
+                'largura': zona.largura,
+                'altura': zona.altura,
                 'id_camera': zona.id_camera
             }
 

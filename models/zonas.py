@@ -5,7 +5,7 @@ class Zona:
     id: int
     nome: str | None
     id_camera: int
-    x1: int = 0
-    y1: int = 0
-    x2: int = 1920
-    y2: int = 1080
+    x: int = 0
+    y: int = 0
+    largura: int = 1920
+    altura: int = 1080

@@ -78,6 +78,9 @@ O servidor estará disponível em `http://127.0.0.1:5000` e pronto para receber 
 
 - `GET /epis` - Lista as EPIs
 - `GET /epis/<id:int>` - Busca a EPI por ID
+- `POST /epis` - Registra uma nova EPI
+- `PUT /epis/<id:int>` - Atualiza uma EPI por ID
+- `DELETE /epis/<id:int>` - Deleta uma EPI por ID
 
 ### Visão Computacional
 

@@ -11,7 +11,6 @@ from repository.zonas_repository import ZonasRepository
 from repository.epi_repository import EpiRepository
 
 from models.alertas import Alerta
-from models.cameras import Camera
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, 'assets', 'modelo', 'treinamento', 'weights', 'best.pt')
@@ -59,12 +58,11 @@ last_results = []
 def get_last_results():
     return last_results
 
-def generate_frames(connection, camera: Camera = None):
+def generate_frames(connection, camera_id: int = 1):
     global last_results
 
     # 1. Busca as zonas configuradas para essa câmera antes de iniciar o loop de frames
-    id_camera_atual = camera.id if camera else 1 # Ajuste caso a câmera venha nula
-    zonas_configuradas = zonas_de_monitoramento(connection, id_camera_atual)
+    zonas_configuradas = zonas_de_monitoramento(connection, camera_id)
 
     while True:
         ret, frame = cap.read()
@@ -74,9 +72,9 @@ def generate_frames(connection, camera: Camera = None):
             break
 
         # 2. Desenha as zonas na tela com cv2.rectangle e sem acentos
-        for class_name, poligonos in zonas_configuradas.items():
+        for nome_categoria, poligonos in zonas_configuradas.items():
             # Remove acentos do nome da zona
-            nome_zona_limpo = remover_acentos(class_name)
+            nome_zona_limpo = remover_acentos(nome_categoria)
             
             for poligono in poligonos:
                 # O cv2.boundingRect acha a caixa delimitadora perfeita de forma automática
@@ -94,8 +92,6 @@ def generate_frames(connection, camera: Camera = None):
         results = model(frame, stream=True, conf=0.5, iou=0.4)
         class_counts = defaultdict(int)
         detections = []
-
-        # Debug: Exibe
 
         for r in results:
             for box in r.boxes:
@@ -187,8 +183,10 @@ def zonas_de_monitoramento(connection, id_camera: int) -> dict:
 
     # Montar o dicionário com a área da zonas e epis que devem ser detectadas (caso null não deve ter pessoa na área)
 
+    print(f"epis_lista: {epis_lista}")
+
     for epi in epis_lista:
-        epis_dict[epi.id] = epi.nome
+        epis_dict[epi.id] = epi.categoria
 
     for zona in zonas_lista:
         x1, y1 = int(zona.x1), int(zona.y1)
@@ -208,15 +206,17 @@ def zonas_de_monitoramento(connection, id_camera: int) -> dict:
         # O reshape((-1, 1, 2)) força a matriz a ficar no formato exato que o OpenCV exige
         poligono = np.array(coordenadas_brutas, dtype=np.int32).reshape((-1, 1, 2)) 
 
-        if id_epi is None:
-            nome_classe = 'pessoa'
+        if id_epi is None or id_epi == 'null':
+            nome_categoria = 'pessoa'
         else:
-            nome_classe = epis_dict.get(id_epi)
+            nome_categoria = epis_dict.get(id_epi)
 
-            if not nome_classe:
+            if not nome_categoria:
                 continue
 
-        zonas_de_deteccao[nome_classe] = poligono
+        zonas_de_deteccao[nome_categoria] = poligono
+
+    print(f"Zonas de detecção configuradas para a câmera {id_camera}: {list(zonas_de_deteccao)}")
 
     return zonas_de_deteccao
 
