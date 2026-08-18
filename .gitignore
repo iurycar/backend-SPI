@@ -13,3 +13,5 @@ assets/modelo/labels/train
 assets/modelo/labels/val
 assets/modelo/test_camera.py
 core/validators.py
+assets/modelo/weights/best.pt
+assets/modelo/weights/yolov8m.pt
