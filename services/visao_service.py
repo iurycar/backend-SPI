@@ -7,6 +7,7 @@ import cv2
 import os
 
 from repository.monitoramento_repository import MonitoramentoRepository
+from models.alertas import Alerta
 from models.zonas import Zona
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
@@ -60,10 +61,30 @@ class VisaoService:
 
         return None, backend
 
-    def get_last_results(self):
-        return self.last_results
+    def zonas_de_monitoramento(self, id_camera: int) -> list[Zona]:
+        """
+        Retorna a lista de zonas de monitoramento para a câmera especificada.
+        """
+        try:
+            self.connection.rollback()
+        except Exception:
+            pass
 
-    def dentro_da_zona(self, box, regiao):
+        monitorar = MonitoramentoRepository(self.connection)
+        zonas = monitorar.get_zonas_monitoradas_por_id_camera(id_camera)
+
+        for zona in zonas:
+            if not zona.epis_categoria:
+                zona.epis_categoria = ['pessoa']
+            else:
+                zona.epis_categoria = [str(epi).strip().lower() for epi in zona.epis_categoria if epi]
+        
+        return zonas
+
+    def dentro_da_zona(self, box: tuple, regiao: list[tuple[int, int]]) -> bool:
+        """
+        Verifica se o centro da caixa delimitadora (box) está dentro do polígono definido por 'regiao'.
+        """
         x1, y1, x2, y2 = box
         cx = int((x1 + x2) / 2)
         cy = int((y1 + y2) / 2)
@@ -72,6 +93,9 @@ class VisaoService:
         return cv2.pointPolygonTest(pts, (cx, cy), False) >= 0
 
     def desenhar_zona(self, frame, regiao, nome):
+        """
+        Desenha a zona no frame com base na região fornecida.
+        """
         color = (255, 0, 0)
         pts = np.array(regiao, np.int32)
         cv2.polylines(frame, [pts], True, color, 2)
@@ -79,6 +103,14 @@ class VisaoService:
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
     def generate_frames(self, camera_id: int = 1):
+        """
+        Gera frames da câmera especificada, aplicando detecção de objetos e verificando se eles estão dentro das zonas configuradas.
+        """
+
+        # ==========================
+        # TODO: Depois precisamos quebrar a função em funções menores para ficar mais legível
+        # ==========================
+
         zonas_configuradas = self.zonas_de_monitoramento(camera_id)
 
         if not zonas_configuradas:
@@ -104,7 +136,7 @@ class VisaoService:
             masked_frame = cv2.bitwise_and(frame, frame, mask=mask)
 
             # Realiza a detecção de objetos no frame mascarado usando o modelo YOLO
-            results = modelo.track(masked_frame, persist=True, conf=0.5, iou=0.4)
+            results = modelo.track(masked_frame, persist=True, conf=0.5, iou=0.4, verbose=False)
 
             detections = []
             class_count = defaultdict(int)
@@ -187,26 +219,20 @@ class VisaoService:
                 b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n'
             )
 
-    def zonas_de_monitoramento(self, id_camera: int) -> list[Zona]:
+    def get_last_results(self):
+        return self.last_results
+
+    def pose_estimation(self, frame):
         """
-        Retorna a lista de zonas de monitoramento para a câmera especificada.
+        TODO: Implementar a lógica de estimativa de pose para detectar se a pessoa está com uma postura adequada.
         """
-        try:
-            self.connection.rollback()
-        except Exception:
-            pass
 
-        monitorar = MonitoramentoRepository(self.connection)
-        zonas = monitorar.get_zonas_monitoradas_por_id_camera(id_camera)
-
-        for zona in zonas:
-            if not zona.epis_categoria:
-                zona.epis_categoria = ['pessoa']
-            else:
-                zona.epis_categoria = [str(epi).strip().lower() for epi in zona.epis_categoria if epi]
-        
-        return zonas
-
+    def gerar_alertas(self) -> list[Alerta]:
+        """
+        TODO: Implementar a lógica para gerar alertas com base nas detecções atuais.
+        """
+        pass
+    
     def remover_acentos(self, texto: str) -> str:
         if not texto:
             return ""
