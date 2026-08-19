@@ -13,8 +13,10 @@ from models.zonas import Zona
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, 'assets', 'modelo', 'treinamento', 'weights', 'best.pt')
+MODEL_PATH_POSE = os.path.join(BASE_DIR, 'assets', 'modelo', 'treinamento', 'weights', 'yolov8n-pose.pt')
 
 modelo = YOLO(MODEL_PATH)
+modelo_pose = YOLO(MODEL_PATH_POSE)
 
 class VisaoService:
     def __init__(self, connection):
@@ -138,13 +140,13 @@ class VisaoService:
             masked_frame = cv2.bitwise_and(frame, frame, mask=mask)
 
             # Realiza a detecção de objetos no frame mascarado usando o modelo YOLO
-            results = modelo.track(masked_frame, persist=True, conf=0.5, iou=0.4, verbose=False)
+            results_object = modelo.track(masked_frame, persist=True, conf=0.5, iou=0.4, verbose=False)
 
             detections = []
             class_count = defaultdict(int)
 
             # Itera sobre os resultados da detecção
-            for r in results:
+            for r in results_object:
                 if r.boxes is None:
                     continue
 
@@ -212,6 +214,10 @@ class VisaoService:
 
             self.last_results = detections
 
+            # TODO: Implementar a lógica de estimativa de pose para detectar se a pessoa 
+            # está com uma postura adequada.
+            self.pose_estimation(frame)
+
             # Codifica o frame em JPEG e o envia como resposta para o cliente
             sucesso, buffer = cv2.imencode('.jpg', frame)
             frame_bytes = buffer.tobytes()
@@ -226,8 +232,42 @@ class VisaoService:
 
     def pose_estimation(self, frame):
         """
-        TODO: Implementar a lógica de estimativa de pose para detectar se a pessoa está com uma postura adequada.
+        Implementa a lógica de estimativa de pose para detectar os pontos 
+        e desenhar os eixos (esqueleto) da pessoa.
         """
+        results = modelo_pose.predict(frame, conf=0.5, verbose=False)
+
+        esqueleto_conexoes = [
+            (0, 1), (0, 2), (1, 3), (2, 4),            # Rosto (Olhos, Nariz e Orelhas)
+            (5, 6), (5, 7), (7, 9), (6, 8), (8, 10),   # Braços e Ombros
+            (5, 11), (6, 12), (11, 12),                # Tronco
+            (11, 13), (13, 15), (12, 14), (14, 16)     # Pernas
+        ]
+
+        for result in results:
+            # Verifica se keypoints não é nulo E se contém alguma detecção
+            if result.keypoints is not None and len(result.keypoints) > 0:
+                keypoints_list = result.keypoints.xy.cpu().numpy()
+
+                for individual in keypoints_list:
+                    # PREVENÇÃO DO ERRO: Garante que o array tem os 17 pontos esperados
+                    if len(individual) < 17:
+                        continue
+
+                    # 1. Desenhar os pontos (Articulações)
+                    for ponto in individual:
+                        x, y = int(ponto[0]), int(ponto[1])
+                        
+                        if x > 0 and y > 0:
+                            cv2.circle(frame, (x, y), 4, (0, 255, 0), -1)
+
+                    # 2. Desenhar os eixos (Esqueleto)
+                    for p1, p2 in esqueleto_conexoes:
+                        x1, y1 = int(individual[p1][0]), int(individual[p1][1])
+                        x2, y2 = int(individual[p2][0]), int(individual[p2][1])
+
+                        if (x1 > 0 and y1 > 0) and (x2 > 0 and y2 > 0):
+                            cv2.line(frame, (x1, y1), (x2, y2), (255, 0, 255), 2)
 
     def gerar_alertas(self) -> list[Alerta]:
         """
