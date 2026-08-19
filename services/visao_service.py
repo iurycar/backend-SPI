@@ -111,10 +111,6 @@ class VisaoService:
         Gera frames da câmera especificada, aplicando detecção de objetos e verificando se eles estão dentro das zonas configuradas.
         """
 
-        # ==========================
-        # TODO: Depois precisamos quebrar a função em funções menores para ficar mais legível
-        # ==========================
-
         zonas_configuradas = self.zonas_de_monitoramento(camera_id)
 
         if not zonas_configuradas:
@@ -128,78 +124,8 @@ class VisaoService:
             if not sucesso:
                 break
 
-            # Cria uma máscara para as zonas configuradas
-            mask = np.zeros(frame.shape[:2], dtype=np.uint8)
-
-            # Preenche a máscara com as regiões das zonas configuradas
-            for monitoramento in zonas_configuradas:
-                pts = np.array(monitoramento.regiao, np.int32)
-                cv2.fillPoly(mask, [pts], 255)
-
-            # Aplica a máscara ao frame original para manter apenas as regiões das zonas configuradas
-            masked_frame = cv2.bitwise_and(frame, frame, mask=mask)
-
-            # Realiza a detecção de objetos no frame mascarado usando o modelo YOLO
-            results_object = modelo.track(masked_frame, persist=True, conf=0.5, iou=0.4, verbose=False)
-
-            detections = []
-            class_count = defaultdict(int)
-
-            # Itera sobre os resultados da detecção
-            for r in results_object:
-                if r.boxes is None:
-                    continue
-
-                # Itera sobre cada caixa detectada
-                for box in r.boxes:
-                    xyxy = box.xyxy[0].cpu().numpy().astype(int) # Obtém as coordenadas da caixa delimitadora
-                    cls = int(box.cls[0]) # Obtém a classe do objeto detectado
-                    conf = float(box.conf[0]) # Obtém a confiança da detecção
-
-                    # Obtém o ID do objeto rastreado (track_id) e o nome da classe (label_name)
-                    track_id = int(box.id[0]) if box.id is not None else -1
-                    label_name = modelo.names[cls].lower()
-
-                    # Verifica se o objeto detectado está dentro de alguma zona configurada e se possui o EPI obrigatório
-                    objeto_valido_na_zona = False
-                    zonas_do_objeto = []
-
-                    # Itera sobre as zonas configuradas para verificar se o objeto está dentro de alguma delas
-                    for monitoramento in zonas_configuradas:
-                        if self.dentro_da_zona(xyxy, monitoramento.regiao):    
-                            if label_name in monitoramento.epis_categoria:
-                                objeto_valido_na_zona = True
-                                zonas_do_objeto.append(monitoramento.id)
-
-                    # Se o objeto não estiver dentro de nenhuma zona válida ou não tiver 
-                    # o EPI obrigatório, ele será ignorado POR ENQUANTO
-                    # TODO: Implementar lógica de alertas para pessoas sem EPI obrigatório
-                    # Se a pessoa estiver dentro da zona, mas não tiver o EPI obrigatório, isso deve gerar um alerta
-                    if not objeto_valido_na_zona:
-                        print(f"Objeto '{label_name}' com ID {track_id} detectado fora da zona ou sem EPI obrigatório.")
-                        continue
-
-                    if label_name != "pessoa":
-                        color = (0, 255, 0)
-                    else: 
-                        color = (0, 0, 255)
-
-                    # Desenha a caixa delimitadora e o rótulo no frame
-                    cv2.rectangle(frame, (xyxy[0], xyxy[1]), (xyxy[2], xyxy[3]), color, 2)
-                    cv2.putText(frame, f"{label_name} ID:{track_id}",
-                                (xyxy[0], max(xyxy[1]-10, 10)),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-
-                    class_count[label_name] += 1
-
-                    # Adiciona a detecção à lista de detecções, associando-a às zonas em que o objeto foi detectado
-                    for z_id in zonas_do_objeto:
-                        detections.append({
-                            "id": track_id,
-                            "label": label_name,
-                            "confidence": conf,
-                            "zona": z_id
-                        })
+            # Realiza a detecção de objetos no frame
+            detections, class_count = self.object_detection(frame, zonas_configuradas)
 
             # Atualiza a lista de detecções e desenha as zonas no frame
             for monitoramento in zonas_configuradas:
@@ -214,8 +140,7 @@ class VisaoService:
 
             self.last_results = detections
 
-            # TODO: Implementar a lógica de estimativa de pose para detectar se a pessoa 
-            # está com uma postura adequada.
+            # Realiza a estimativa de pose no frame
             self.pose_estimation(frame)
 
             # Codifica o frame em JPEG e o envia como resposta para o cliente
@@ -230,13 +155,95 @@ class VisaoService:
     def get_last_results(self):
         return self.last_results
 
+    def object_detection(self, frame, zonas_configuradas):
+        """
+            Realiza a detecção de objetos no frame e verifica se eles estão dentro das zonas configuradas, além de verificar se possuem o EPI obrigatório.
+        """
+
+        # Cria uma máscara para as zonas configuradas
+        mask = np.zeros(frame.shape[:2], dtype=np.uint8)
+
+        # Preenche a máscara com as regiões das zonas configuradas
+        for monitoramento in zonas_configuradas:
+            pts = np.array(monitoramento.regiao, np.int32)
+            cv2.fillPoly(mask, [pts], 255)
+
+        # Aplica a máscara ao frame original para manter apenas as regiões das zonas configuradas
+        masked_frame = cv2.bitwise_and(frame, frame, mask=mask)
+
+        # Realiza a detecção de objetos no frame mascarado usando o modelo YOLO
+        results_object = modelo.track(masked_frame, persist=True, conf=0.5, iou=0.4, verbose=False)
+
+        detections = []
+        class_count = defaultdict(int)
+
+        # Itera sobre os resultados da detecção
+        for r in results_object:
+            if r.boxes is None:
+                continue
+
+            # Itera sobre cada caixa detectada
+            for box in r.boxes:
+                xyxy = box.xyxy[0].cpu().numpy().astype(int) # Obtém as coordenadas da caixa delimitadora
+                cls = int(box.cls[0]) # Obtém a classe do objeto detectado
+                conf = float(box.conf[0]) # Obtém a confiança da detecção
+
+                # Obtém o ID do objeto rastreado (track_id) e o nome da classe (label_name)
+                track_id = int(box.id[0]) if box.id is not None else -1
+                label_name = modelo.names[cls].lower()
+
+                # Verifica se o objeto detectado está dentro de alguma zona configurada e se possui o EPI obrigatório
+                objeto_valido_na_zona = False
+                zonas_do_objeto = []
+
+                # Itera sobre as zonas configuradas para verificar se o objeto está dentro de alguma delas
+                for monitoramento in zonas_configuradas:
+                    if self.dentro_da_zona(xyxy, monitoramento.regiao):    
+                        if label_name in monitoramento.epis_categoria:
+                            objeto_valido_na_zona = True
+                            zonas_do_objeto.append(monitoramento.id)
+
+                # Se o objeto não estiver dentro de nenhuma zona válida ou não tiver 
+                # o EPI obrigatório, ele será ignorado POR ENQUANTO
+                # TODO: Implementar lógica de alertas para pessoas sem EPI obrigatório
+                # Se a pessoa estiver dentro da zona, mas não tiver o EPI obrigatório, isso deve gerar um alerta
+                if not objeto_valido_na_zona:
+                    print(f"Objeto '{label_name}' com ID {track_id} detectado fora da zona ou sem EPI obrigatório.")
+                    continue
+
+                if label_name != "pessoa":
+                    color = (0, 255, 0)
+                else: 
+                    color = (0, 0, 255)
+
+                # Desenha a caixa delimitadora e o rótulo no frame
+                cv2.rectangle(frame, (xyxy[0], xyxy[1]), (xyxy[2], xyxy[3]), color, 2)
+                cv2.putText(frame, f"{label_name} ID:{track_id}",
+                            (xyxy[0], max(xyxy[1]-10, 10)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
+                class_count[label_name] += 1
+
+                # Adiciona a detecção à lista de detecções, associando-a às zonas em que o objeto foi detectado
+                for z_id in zonas_do_objeto:
+                    detections.append({
+                        "id": track_id,
+                        "label": label_name,
+                        "confidence": conf,
+                        "zona": z_id
+                    })
+
+        return detections, class_count
+
     def pose_estimation(self, frame):
         """
         Implementa a lógica de estimativa de pose para detectar os pontos 
         e desenhar os eixos (esqueleto) da pessoa.
         """
+        # Realiza a estimativa de pose no frame usando o modelo YOLO para pose
         results = modelo_pose.predict(frame, conf=0.5, verbose=False)
 
+        # Define as conexões do esqueleto com base nos pontos-chave detectados
         esqueleto_conexoes = [
             (0, 1), (0, 2), (1, 3), (2, 4),            # Rosto (Olhos, Nariz e Orelhas)
             (5, 6), (5, 7), (7, 9), (6, 8), (8, 10),   # Braços e Ombros
@@ -244,13 +251,13 @@ class VisaoService:
             (11, 13), (13, 15), (12, 14), (14, 16)     # Pernas
         ]
 
+        # Itera sobre os resultados da estimativa de pose
         for result in results:
             # Verifica se keypoints não é nulo E se contém alguma detecção
             if result.keypoints is not None and len(result.keypoints) > 0:
                 keypoints_list = result.keypoints.xy.cpu().numpy()
 
                 for individual in keypoints_list:
-                    # PREVENÇÃO DO ERRO: Garante que o array tem os 17 pontos esperados
                     if len(individual) < 17:
                         continue
 
