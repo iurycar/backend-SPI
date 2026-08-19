@@ -77,17 +77,45 @@ O servidor estará disponível em `http://127.0.0.1:5000` e pronto para receber 
 ### EPIs
 
 - `GET /epis` - Lista as EPIs
-- `GET /epis/<id:int>` - Busca a EPI por ID
+- `GET /epis/<int:epi_id>` - Busca a EPI por ID
 - `POST /epis` - Registra uma nova EPI
-- `PUT /epis/<id:int>` - Atualiza uma EPI por ID
-- `DELETE /epis/<id:int>` - Deleta uma EPI por ID
+- `PUT /epis/<int:epi_id>` - Atualiza uma EPI por ID
+- `DELETE /epis/<int:epi_id>` - Deleta uma EPI por ID
 
 ### Visão Computacional
 
-- `/video` - Acessa o vídeo da visão
-- `/detections` - Retorna a lista de detecções
+- `GET /video` - Acessa o vídeo da visão
+- `GET /video/<int:camera_id>` - Acessa o vídeo da câmera especificada
+- `GET /detections` - Retorna a lista de detecções
 
 ### Zonas
 - `GET /zonas` - Lista todas as zonas
 - `GET /zonas/<int:zona_id>` - Obtém a zona por ID
-- `GET /zonas/camera/<int:camera_id>` - Lista as zonas por ID da câmera
+- `POST /zonas/registrar` - Registra uma nova zona
+- `PUT /zonas/<int:zona_id>` - Atualiza uma zona por ID
+- `DELETE /zonas/<int:zona_id>` - Deleta uma zona por ID
+
+### Câmeras
+- `GET /cameras` - Lista todas as câmeras
+- `GET /cameras/<int:camera_id>` - Obtém a câmera por ID
+- `GET /cameras/setor/<int:setor_id>` - Lista câmeras por ID do setor
+- `GET /cameras/<int:camera_id>/zonas` - Lista zonas associadas à câmera
+- `POST /cameras/registrar` - Registra uma nova câmera
+- `PUT /cameras/<int:camera_id>` - Atualiza câmera por ID
+- `DELETE /cameras/<int:camera_id>` - Deleta uma câmera por ID
+
+### Alertas
+- `GET /alertas` - Lista todos os alertas
+- `GET /alertas/<int:alerta_id>` - Obtém alerta por ID
+- `GET /alertas/camera/<int:camera_id>` - Lista alertas por ID da câmera
+- `GET /alertas/zona/<int:zona_id>` - Lista alertas por ID da zona
+- `PUT /alertas/<int:alerta_id>/resolvido` - Marca alerta como resolvido
+- `DELETE /alertas/<int:alerta_id>` - Deleta um alerta por ID
+
+### Setores
+- `GET /setores` - Lista todos os setores
+- `GET /setores/<int:setor_id>` - Obtém setor por ID
+- `GET /setores/responsavel/<int:usuario_id>` - Lista setores por responsável (usuário)
+- `POST /setores/registrar` - Registra um novo setor
+- `PUT /setores/<int:setor_id>` - Atualiza setor por ID
+- `DELETE /setores/<int:setor_id>` - Deleta setor por ID
