@@ -42,10 +42,10 @@ INSERT INTO monitorar (id_zona, id_camera, id_epi) VALUES
 
 -- 7. POPULAR TABELA ALERTAS (Depende de monitorar e usuarios)
 -- Alertas gerados pelo sistema por falta de EPI
-INSERT INTO alertas (resolvido, data_hora, id_monitorar, id_usuario) VALUES
-(TRUE,  CURRENT_TIMESTAMP - INTERVAL '2 hours', 1, 1), -- Alerta resolvido pelo usuário Carlos
-(FALSE, CURRENT_TIMESTAMP - INTERVAL '30 minutes', 2, 1), -- Alerta pendente
-(FALSE, CURRENT_TIMESTAMP - INTERVAL '5 minutes', 3, 2);  -- Alerta recente atribuído à Ana
+INSERT INTO alertas (resolvido, data_hora, id_monitorar, id_usuario, evento) VALUES
+(TRUE,  CURRENT_TIMESTAMP - INTERVAL '2 hours', 1, 1, 'Falta de Capacete'), -- Alerta resolvido pelo usuário Carlos
+(FALSE, CURRENT_TIMESTAMP - INTERVAL '30 minutes', 2, 1, 'Falta de Óculos'), -- Alerta pendente
+(FALSE, CURRENT_TIMESTAMP - INTERVAL '5 minutes', 3, 2, 'Falta de Máscara de Solda');  -- Alerta recente atribuído à Ana
 
 INSERT INTO responsabilidade (id_usuario, id_setor) VALUES
 (1, 1), (1, 2), (1, 3), -- Usuário de ID 1 é responsável pelo setores 1, 2 e 3

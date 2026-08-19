@@ -7,6 +7,7 @@ import cv2
 import os
 
 from repository.monitoramento_repository import MonitoramentoRepository
+from services.alertas_service import AlertasService
 from models.alertas import Alerta
 from models.zonas import Zona
 
@@ -18,6 +19,8 @@ modelo = YOLO(MODEL_PATH)
 class VisaoService:
     def __init__(self, connection):
         self.connection = connection
+        self.monitoramento_repository = MonitoramentoRepository(connection)
+        self.alertas_service = AlertasService(connection)
         self.last_results = []
         self.cap = None
 
@@ -70,8 +73,7 @@ class VisaoService:
         except Exception:
             pass
 
-        monitorar = MonitoramentoRepository(self.connection)
-        zonas = monitorar.get_zonas_monitoradas_por_id_camera(id_camera)
+        zonas = self.monitoramento_repository.get_zonas_monitoradas_por_id_camera(id_camera)
 
         for zona in zonas:
             if not zona.epis_categoria:

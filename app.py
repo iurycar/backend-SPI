@@ -6,6 +6,7 @@ import os
 
 from controller.cameras_routes import create_cameras_bp
 from controller.setores_routes import create_setores_bp
+from controller.alertas_routes import create_alertas_bp
 from controller.usuario_routes import create_user_bp
 from controller.visao_routes import create_visao_bp
 from controller.zonas_routes import create_zonas_bp
@@ -45,6 +46,7 @@ conn = Connection()
 
 app.register_blueprint(create_cameras_bp(conn.get_connection()))
 app.register_blueprint(create_setores_bp(conn.get_connection()))
+app.register_blueprint(create_alertas_bp(conn.get_connection()))
 app.register_blueprint(create_zonas_bp(conn.get_connection()))
 app.register_blueprint(create_visao_bp(conn.get_connection()))
 app.register_blueprint(create_user_bp(conn.get_connection()))

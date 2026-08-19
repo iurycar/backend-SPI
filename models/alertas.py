@@ -7,6 +7,7 @@ class Alerta:
     id_monitorar: int
     id_epi: int | None
     id_usuario: int | None
+    id_camera: int | None
     data: str
     resolvido: bool = False
     evento: str = ""
