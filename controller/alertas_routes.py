@@ -45,4 +45,12 @@ def create_alertas_bp(connection):
         else:
             return jsonify({'message': 'Falha ao marcar alerta como resolvido'}), 400
 
+    @alertas_bp.route('/alertas/<int:alerta_id>', methods=['DELETE'])
+    def deletar_alerta(alerta_id):
+        sucesso = alertas_service.deletar_alerta(alerta_id)
+        if sucesso:
+            return jsonify({'message': 'Alerta deletado com sucesso'}), 200
+        else:
+            return jsonify({'message': 'Falha ao deletar alerta'}), 400
+
     return alertas_bp

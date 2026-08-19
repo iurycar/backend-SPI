@@ -95,3 +95,6 @@ class AlertasService:
 
     def criar_alerta(self, id_monitorar: int, id_usuario: int | None, evento: str) -> bool:
         return self.alertas_repository.criar_alerta(id_monitorar, id_usuario, evento)
+
+    def deletar_alerta(self, id_alerta: int) -> bool:
+        return self.alertas_repository.deletar_alerta(id_alerta)

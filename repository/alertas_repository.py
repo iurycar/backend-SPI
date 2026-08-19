@@ -111,3 +111,10 @@ class AlertasRepository:
             cursor.execute(query, (id_monitorar, id_usuario, evento))
             self.conn.commit()
             return cursor.rowcount > 0
+
+    def deletar_alerta(self, id_alerta: int) -> bool:
+        with self.conn.cursor() as cursor:
+            query = "DELETE FROM alertas WHERE id_alerta = %s;"
+            cursor.execute(query, (id_alerta,))
+            self.conn.commit()
+            return cursor.rowcount > 0
