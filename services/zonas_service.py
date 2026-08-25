@@ -22,6 +22,7 @@ class ZonasService:
                 'y': zona.y,
                 'largura': zona.largura,
                 'altura': zona.altura,
+                'permitido': zona.permitido,
                 'id_camera': zona.id_camera
             }
 
@@ -40,6 +41,7 @@ class ZonasService:
                 'y': zona.y,
                 'largura': zona.largura,
                 'altura': zona.altura,
+                'permitido': zona.permitido,
                 'id_camera': zona.id_camera
             }
 
@@ -59,6 +61,7 @@ class ZonasService:
                     'y': zona.y,
                     'largura': zona.largura,
                     'altura': zona.altura,
+                    'permitido': zona.permitido,
                     'id_camera': zona.id_camera
                 }
                 zonas_lista.append(zona_dict)
@@ -78,7 +81,8 @@ class ZonasService:
             zona_dto.x,
             zona_dto.y,
             zona_dto.largura,
-            zona_dto.altura
+            zona_dto.altura,
+            zona_dto.permitido
         )
 
         if zona:
@@ -89,6 +93,7 @@ class ZonasService:
                 'y': zona.y,
                 'largura': zona.largura,
                 'altura': zona.altura,
+                'permitido': zona.permitido,
                 'id_camera': zona.id_camera
             }
 
@@ -101,14 +106,17 @@ class ZonasService:
             print(f"Erro ao criar ZonaDTO: {e}")
             return None
 
+        print(f"Atualizando zona com ID {zona_id} usando dados: {data}")
+
         zona = self.zonas_repository.atualizar_zona(
             zona_id,
             zona_dto.nome,
+            zona_dto.id_camera,
             zona_dto.x,
             zona_dto.y,
             zona_dto.largura,
             zona_dto.altura,
-            zona_dto.id_camera
+            zona_dto.permitido
         )
 
         if zona:
@@ -119,6 +127,7 @@ class ZonasService:
                 'y': zona.y,
                 'largura': zona.largura,
                 'altura': zona.altura,
+                'permitido': zona.permitido,
                 'id_camera': zona.id_camera
             }
 

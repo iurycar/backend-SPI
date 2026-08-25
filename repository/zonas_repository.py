@@ -21,7 +21,8 @@ class ZonasRepository:
                         y=zona[3],
                         largura=zona[4],
                         altura=zona[5],
-                        id_camera=zona[6]
+                        permitido=zona[6],
+                        id_camera=zona[7]
                     ))
 
                 return zonas_lista
@@ -37,11 +38,12 @@ class ZonasRepository:
                 return Zona(
                     id=zona[0],
                     nome=zona[1],
-                    id_camera=zona[6],
                     x=zona[2],
                     y=zona[3],
                     largura=zona[4],
-                    altura=zona[5]
+                    altura=zona[5],
+                    permitido=zona[6],
+                    id_camera=zona[7]
                 )
             else:
                 return None
@@ -59,60 +61,79 @@ class ZonasRepository:
                     zonas_lista.append(Zona(
                         id=zona[0],
                         nome=zona[1],
-                        id_camera=zona[6],
                         x=zona[2],
                         y=zona[3],
                         largura=zona[4],
-                        altura=zona[5]
+                        altura=zona[5],
+                        permitido=zona[6],
+                        id_camera=zona[7]
                     ))
 
                 return zonas_lista
             
             return None
 
-    def registrar_zona(self, nome: str | None, id_camera: int, x: int = 0, y: int = 0, largura: int = 1920, altura: int = 1080) -> Zona | None:
+    def registrar_zona(self, nome: str | None, id_camera: int, x: int = 0, y: int = 0, largura: int = 1920, altura: int = 1080, permitido: bool = True) -> Zona | None:
         with self.conn.cursor() as cursor:
-            cursor.execute(
-                "INSERT INTO zonas (nome, x, y, largura, altura, id_camera) VALUES (%s, %s, %s, %s, %s, %s) RETURNING *",
-                (nome, x, y, largura, altura, id_camera)
-            )
-            zona = cursor.fetchone()
-
-            if zona:
-                return Zona(
-                    id=zona[0],
-                    nome=zona[1],
-                    id_camera=zona[6],
-                    x=zona[2],
-                    y=zona[3],
-                    largura=zona[4],
-                    altura=zona[5]
+            try:
+                cursor.execute(
+                    "INSERT INTO zonas (nome, x, y, largura, altura, id_camera, permitido) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING *",
+                    (nome, x, y, largura, altura, id_camera, permitido)
                 )
-            else:
-                return None
+                zona = cursor.fetchone()
+                cursor.execute("COMMIT")
 
-    def atualizar_zona(self, zona_id: int, nome: str | None, id_camera: int, x: int = 0, y: int = 0, largura: int = 1920, altura: int = 1080) -> Zona | None:
+                if zona:
+                    return Zona(
+                        id=zona[0],
+                        nome=zona[1],
+                        x=zona[2],
+                        y=zona[3],
+                        largura=zona[4],
+                        altura=zona[5],
+                        permitido=zona[6],
+                        id_camera=zona[7]
+                    )
+            except Exception as e:
+                print(f"Erro ao registrar zona: {e}")
+                self.conn.rollback()
+
+        return None
+
+    def atualizar_zona(self, zona_id: int, nome: str | None, id_camera: int, x: int = 0, y: int = 0, largura: int = 1920, altura: int = 1080, permitido: bool = True) -> Zona | None:
         with self.conn.cursor() as cursor:
-            cursor.execute(
-                "UPDATE zonas SET nome = %s, x = %s, y = %s, largura = %s, altura = %s, id_camera = %s WHERE id_zona = %s RETURNING *",
-                (nome, x, y, largura, altura, id_camera, zona_id)
-            )
-            zona = cursor.fetchone()
-
-            if zona:
-                return Zona(
-                    id=zona[0],
-                    nome=zona[1],
-                    id_camera=zona[6],
-                    x=zona[2],
-                    y=zona[3],
-                    largura=zona[4],
-                    altura=zona[5]
+            try:
+                cursor.execute(
+                    "UPDATE zonas SET nome = %s, x = %s, y = %s, largura = %s, altura = %s, id_camera = %s, permitido = %s WHERE id_zona = %s RETURNING *",
+                    (nome, x, y, largura, altura, id_camera, permitido, zona_id)
                 )
-            else:
-                return None
+                self.conn.commit()
+                zona = cursor.fetchone()
+
+                if zona:
+                    return Zona(
+                        id=zona[0],
+                        nome=zona[1],
+                        x=zona[2],
+                        y=zona[3],
+                        largura=zona[4],
+                        altura=zona[5],
+                        permitido=zona[6],
+                        id_camera=zona[7]
+                    )
+            except Exception as e:
+                print(f"Erro ao atualizar zona: {e}")
+                self.conn.rollback()
+                            
+        return None
 
     def deletar_zona(self, zona_id: int) -> bool:
         with self.conn.cursor() as cursor:
-            cursor.execute("DELETE FROM zonas WHERE id_zona = %s", (zona_id,))
-            return cursor.rowcount > 0
+            try:
+                cursor.execute("DELETE FROM zonas WHERE id_zona = %s", (zona_id,))
+                self.conn.commit()
+                return cursor.rowcount > 0
+            except Exception as e:
+                print(f"Erro ao deletar zona: {e}")
+                self.conn.rollback()
+                return False

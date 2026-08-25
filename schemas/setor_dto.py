@@ -15,6 +15,5 @@ class SetorDTO:
             raise ValueError("Nome must be a string.")
 
         return cls(
-            id=id,
             nome=nome
         )

@@ -2,7 +2,6 @@ from dataclasses import dataclass
 
 @dataclass
 class EpiDTO:
-    id: int
     nome: str
     categoria: str
     certificado: str
@@ -47,7 +46,6 @@ class EpiDTO:
             raise ValueError("Em Uso must be an integer.")
 
         return cls(
-            id=id,
             nome=nome,
             categoria=categoria,
             certificado=certificado,

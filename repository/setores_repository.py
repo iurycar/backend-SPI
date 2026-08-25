@@ -57,12 +57,15 @@ class SetoresRepository:
 
             return None
 
-    def registrar_setor(self, nome: str) -> Setor | None:
+    def get_setor_por_id_zona(self, zona_id: int) -> Setor | None:
         with self.conn.cursor() as cursor:
-            cursor.execute(
-                "INSERT INTO setores (nome) VALUES (%s) RETURNING *",
-                (nome,)
-            )
+            # Faz uma consulta para obter o setor associado à zona
+            query = """SELECT s.id_setor, s.nome
+                FROM setores s
+                JOIN cameras c on c.id_setor = s.id_setor
+                JOIN zonas z on z.id_camera = c.id_camera WHERE z.id_zona = %s"""
+            
+            cursor.execute(query, (zona_id,))
             setor = cursor.fetchone()
 
             if setor:
@@ -72,27 +75,72 @@ class SetoresRepository:
                 )
 
             return None
+
+    def get_responsaveis_por_setor(self, setor_id: int) -> list[int] | None:
+        with self.conn.cursor() as cursor:
+            # Faz uma consulta para obter os IDs dos usuários responsáveis pelo setor
+            cursor.execute(
+                "SELECT id_usuario FROM responsabilidade WHERE id_setor = %s", (setor_id,))
+            responsaveis = cursor.fetchall()
+
+            if responsaveis:
+                return [responsavel[0] for responsavel in responsaveis]
+
+            return None
+
+    def registrar_setor(self, nome: str) -> Setor | None:
+        with self.conn.cursor() as cursor:
+            try:
+                cursor.execute(
+                    "INSERT INTO setores (nome) VALUES (%s) RETURNING *",
+                    (nome,)
+                )
+                self.conn.commit()
+                setor = cursor.fetchone()
+
+                if setor:
+                    return Setor(
+                        id=setor[0],
+                        nome=setor[1]
+                    )
+            except Exception as e:
+                print(f"Erro ao registrar setor: {e}")
+                self.conn.rollback()
+        return None
 
     def atualizar_setor(self, setor_id: int, nome: str) -> Setor | None:
         with self.conn.cursor() as cursor:
-            cursor.execute(
-                "UPDATE setores SET nome = %s WHERE id_setor = %s RETURNING *",
-                (nome, setor_id)
-            )
-            setor = cursor.fetchone()
-
-            if setor:
-                return Setor(
-                    id=setor[0],
-                    nome=setor[1]
+            try:
+                cursor.execute(
+                    "UPDATE setores SET nome = %s WHERE id_setor = %s RETURNING *",
+                    (nome, setor_id)
                 )
+                self.conn.commit()
+                setor = cursor.fetchone()
 
-            return None
+                if setor:
+                    return Setor(
+                        id=setor[0],
+                        nome=setor[1]
+                    )
+            except Exception as e:
+                print(f"Erro ao atualizar setor: {e}")
+                self.conn.rollback()
+
+        return None
 
     def deletar_setor(self, setor_id: int) -> bool:
         with self.conn.cursor() as cursor:
-            cursor.execute(
-                "DELETE FROM setores WHERE id_setor = %s",
-                (setor_id,)
-            )
-            return cursor.rowcount > 0
+            try:
+                cursor.execute(
+                    "DELETE FROM setores WHERE id_setor = %s",
+                    (setor_id,)
+                )
+                self.conn.commit()
+                return cursor.rowcount > 0
+            
+            except Exception as e:
+                print(f"Erro ao deletar setor: {e}")
+                self.conn.rollback()
+
+        return False
