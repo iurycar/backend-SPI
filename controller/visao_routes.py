@@ -9,9 +9,14 @@ def create_visao_bp(connection):
     @visao_bp.route('/video', defaults={'camera_id': 1}, methods=['GET'])
     @visao_bp.route('/video/', defaults={'camera_id': 1}, methods=['GET'])
     @visao_bp.route('/video/<int:camera_id>', methods=['GET'])
-    def video(camera_id=1): 
+    def video(camera_id=1):
+        video = visao_service.generate_frames(camera_id)
+
+        if video is None:
+            return Response("Nenhuma câmera disponível encontrada.", status=503)
+
         return Response(
-            visao_service.generate_frames(camera_id),
+            video,
             mimetype='multipart/x-mixed-replace; boundary=frame'
         )
 

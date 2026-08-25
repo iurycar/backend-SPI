@@ -19,10 +19,10 @@ INSERT INTO cameras (ip, id_setor) VALUES
 
 -- 4. POPULAR TABELA ZONAS (Depende de cameras)
 -- Coordenadas simuladas (x, y, largura, altura)
-INSERT INTO zonas (nome, x, y, largura, altura, id_camera) VALUES
-('Entrada Principal', 10, 10, 100, 200, 1),
-('Posto de Montagem 01', 120, 50, 300, 250, 1),
-('Célula de Solda 01', 50, 50, 400, 400, 3);
+INSERT INTO zonas (nome, x, y, largura, altura, id_camera, permitido) VALUES
+('Entrada Principal', 10, 10, 100, 200, 1, TRUE),
+('Posto de Montagem 01', 120, 50, 300, 250, 1, TRUE),
+('Célula de Solda 01', 50, 50, 400, 400, 3, TRUE);
 
 -- 5. POPULAR TABELA EPIS
 INSERT INTO epis (nome, categoria, certificado, validade, estoque, quantidade_min, em_uso) VALUES
@@ -42,10 +42,10 @@ INSERT INTO monitorar (id_zona, id_camera, id_epi) VALUES
 
 -- 7. POPULAR TABELA ALERTAS (Depende de monitorar e usuarios)
 -- Alertas gerados pelo sistema por falta de EPI
-INSERT INTO alertas (resolvido, data_hora, id_monitorar, id_usuario, evento) VALUES
-(TRUE,  CURRENT_TIMESTAMP - INTERVAL '2 hours', 1, 1, 'Falta de Capacete'), -- Alerta resolvido pelo usuário Carlos
-(FALSE, CURRENT_TIMESTAMP - INTERVAL '30 minutes', 2, 1, 'Falta de Óculos'), -- Alerta pendente
-(FALSE, CURRENT_TIMESTAMP - INTERVAL '5 minutes', 3, 2, 'Falta de Máscara de Solda');  -- Alerta recente atribuído à Ana
+INSERT INTO alertas (resolvido, data_hora, id_monitorar, id_usuario) VALUES
+(TRUE,  CURRENT_TIMESTAMP - INTERVAL '2 hours', 1, 1), -- Alerta resolvido pelo usuário Carlos
+(FALSE, CURRENT_TIMESTAMP - INTERVAL '30 minutes', 2, 1), -- Alerta pendente
+(FALSE, CURRENT_TIMESTAMP - INTERVAL '5 minutes', 3, 2);  -- Alerta recente atribuído à Ana
 
 INSERT INTO responsabilidade (id_usuario, id_setor) VALUES
 (1, 1), (1, 2), (1, 3), -- Usuário de ID 1 é responsável pelo setores 1, 2 e 3
@@ -53,10 +53,3 @@ INSERT INTO responsabilidade (id_usuario, id_setor) VALUES
 (3, 1), (3, 2), (3, 3); -- Usuário de ID 3 é responsável pelo setores 1, 2 e 3
 
 SELECT * FROM usuarios;
-SELECT * FROM setores;
-SELECT * FROM cameras;
-SELECT * FROM zonas;
-SELECT * FROM epis;
-SELECT * FROM monitorar;
-SELECT * FROM alertas;
-SELECT * FROM responsabilidade;
