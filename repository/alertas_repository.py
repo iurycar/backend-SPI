@@ -21,9 +21,10 @@ class AlertasRepository:
                         id_monitorar=alerta[3],
                         id_usuario=alerta[4],
                         evento=alerta[5],
-                        id_zona=alerta[6],
+                        severidade=alerta[6],
+                        id_zona=alerta[7],
                         id_camera=alerta[8],
-                        id_epi=alerta[7]
+                        id_epi=alerta[9]
                     ))
 
             return alertas_lista
@@ -45,9 +46,10 @@ class AlertasRepository:
                         id_monitorar=alerta[3],
                         id_usuario=alerta[4],
                         evento=alerta[5],
-                        id_zona=alerta[6],
+                        severidade=alerta[6],
+                        id_zona=alerta[7],
                         id_camera=alerta[8],
-                        id_epi=alerta[7]
+                        id_epi=alerta[9]
                     ))
 
             return alertas_lista
@@ -69,9 +71,10 @@ class AlertasRepository:
                         id_monitorar=alerta[3],
                         id_usuario=alerta[4],
                         evento=alerta[5],
-                        id_zona=alerta[6],
+                        severidade=alerta[6],
+                        id_zona=alerta[7],
                         id_camera=alerta[8],
-                        id_epi=alerta[7]
+                        id_epi=alerta[9]
                     ))
 
             return alertas_lista
@@ -90,9 +93,10 @@ class AlertasRepository:
                     id_monitorar=alerta[3],
                     id_usuario=alerta[4],
                     evento=alerta[5],
-                    id_zona=alerta[6],
+                    severidade=alerta[6],
+                    id_zona=alerta[7],
                     id_camera=alerta[8],
-                    id_epi=alerta[7]
+                    id_epi=alerta[9]
                 )
             else:
                 return None
@@ -114,9 +118,10 @@ class AlertasRepository:
                         id_monitorar=alerta[3],
                         id_usuario=alerta[4],
                         evento=alerta[5],
-                        id_zona=alerta[6],
+                        severidade=alerta[6],
+                        id_zona=alerta[7],
                         id_camera=alerta[8],
-                        id_epi=alerta[7]
+                        id_epi=alerta[9]
                     ))
 
             return alertas_lista

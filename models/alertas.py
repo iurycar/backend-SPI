@@ -11,3 +11,4 @@ class Alerta:
     data_hora: str
     resolvido: bool = False
     evento: str = ""
+    severidade: int = 1

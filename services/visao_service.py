@@ -278,24 +278,24 @@ class VisaoService:
                             # Verifica se o objeto é 'com_...' ou 'sem_...' e se está dentro da zona que requer o EPI correspondente
                             if label_name.startswith("sem_"):
                                 self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name} ID:{track_id}", self.CORES.get('vermelho', (0, 0, 255)))
-                                self.registrar_alerta_epi_incorreto(monitoramento, f"Sem EPI necessário: {self.classe_epi_por_label(label_name)}", track_id)
+                                self.registrar_alerta_epi_incorreto(monitoramento, f"Sem EPI necessário: {self.classe_epi_por_label(label_name)}", track_id, severidade=2)
                             else:
                                 # Verifica se o objeto é normal, caso seja desenha a caixa delimitadora em amarelo e registra o alerta de EPI incorreto
                                 if label_name.endswith("_normal"):
                                     self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')} ID:{track_id}", self.CORES.get('amarelo', (0, 255, 255)))
-                                    self.registrar_alerta_epi_incorreto(monitoramento, f"Equipamento inadequado: {self.classe_epi_por_label(label_name)}", track_id)
+                                    self.registrar_alerta_epi_incorreto(monitoramento, f"Equipamento inadequado: {self.classe_epi_por_label(label_name)}", track_id, severidade=1)
                                 else:
                                     self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')} ID:{track_id} (Requisitado)", self.CORES.get('verde', (0, 255, 0)))
 
                         # Verifica se o objeto é 'pessoa' e se está dentro da zona que não permite pessoas
                         if label_name == "pessoa" and not self.zona_requer_classe(monitoramento.epis_categoria, "pessoa", monitoramento.permitido):
                             self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name} ID:{track_id} (Zona Restrita)", self.CORES.get('vermelho', (0, 0, 255)))
-                            self.registrar_alerta_epi_incorreto(monitoramento, "Pessoa em zona restrita", track_id)
+                            self.registrar_alerta_epi_incorreto(monitoramento, "Pessoa em zona restrita", track_id, severidade=3)
 
 
                 if label_name == "pessoa" and self.zona_requer_classe(monitoramento.epis_categoria, "pessoa"):
                     self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name} ID:{track_id}", self.CORES.get('magenta', (255, 0, 255)))
-
+                
                 class_count[label_name] += 1
 
                 # Adiciona a detecção à lista de detecções, associando-a às zonas em que o objeto foi detectado
@@ -352,7 +352,7 @@ class VisaoService:
                             cv2.line(frame, (x1, y1), (x2, y2), self.CORES.get('magenta', (255, 0, 255)), 2)
 
 
-    def registrar_alerta_epi_incorreto(self, monitoramento: Zona, evento: str, track_id: int) -> None:
+    def registrar_alerta_epi_incorreto(self, monitoramento: Zona, evento: str, track_id: int, severidade: int = 1) -> None:
         """
         Registra um alerta, evitando duplicidade por um curto período.
         """

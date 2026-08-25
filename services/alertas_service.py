@@ -19,6 +19,7 @@ class AlertasService:
                     'id_monitorar': alerta.id_monitorar,
                     'id_usuario': alerta.id_usuario,
                     'evento': alerta.evento,
+                    'severidade': alerta.severidade,
                     'id_zona': alerta.id_zona,
                     'id_camera': alerta.id_camera,
                     'id_epi': alerta.id_epi
@@ -41,6 +42,7 @@ class AlertasService:
                     'id_monitorar': alerta.id_monitorar,
                     'id_usuario': alerta.id_usuario,
                     'evento': alerta.evento,
+                    'severidade': alerta.severidade,
                     'id_zona': alerta.id_zona,
                     'id_camera': alerta.id_camera,
                     'id_epi': alerta.id_epi
@@ -63,6 +65,7 @@ class AlertasService:
                     'id_monitorar': alerta.id_monitorar,
                     'id_usuario': alerta.id_usuario,
                     'evento': alerta.evento,
+                    'severidade': alerta.severidade,
                     'id_zona': alerta.id_zona,
                     'id_camera': alerta.id_camera,
                     'id_epi': alerta.id_epi
@@ -82,6 +85,7 @@ class AlertasService:
                 'id_monitorar': alerta.id_monitorar,
                 'id_usuario': alerta.id_usuario,
                 'evento': alerta.evento,
+                'severidade': alerta.severidade,
                 'id_zona': alerta.id_zona,
                 'id_camera': alerta.id_camera,
                 'id_epi': alerta.id_epi
