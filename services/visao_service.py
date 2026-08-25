@@ -33,6 +33,17 @@ class VisaoService:
         'sem_mascara': 'mascara',
     }
 
+    CORES = {
+        'verde': (0, 255, 0),
+        'vermelho': (0, 0, 255),
+        'azul': (255, 0, 0),
+        'amarelo': (0, 255, 255),
+        'ciano': (255, 255, 0),
+        'magenta': (255, 0, 255),
+        'cinza': (120, 120, 120),
+        'branco': (255, 255, 255),
+    }
+
 
     def __init__(self, connection):
         self.connection = connection
@@ -147,7 +158,7 @@ class VisaoService:
         """
         Desenha a zona no frame com base na região fornecida.
         """
-        color = (255, 0, 0)
+        color = self.CORES.get('azul', (255, 0, 0))
         pts = np.array(regiao, np.int32)
         cv2.polylines(frame, [pts], True, color, 2)
         cv2.putText(frame, f"Zona: {nome}", (regiao[0][0], regiao[0][1] - 10),
@@ -161,14 +172,16 @@ class VisaoService:
 
 
     def zona_requer_classe(self, categorias_permitidas: list[str] | None, classe: str, permitido: bool = False) -> bool:
-        if not categorias_permitidas:
-            return False
-
         if classe == "pessoa" and permitido:
             return True
 
+        if not categorias_permitidas:
+            return False
+
         for categoria in categorias_permitidas:
-            if self.classe_epi_por_label(categoria) == classe:
+            categoria_normalizada = self.classe_epi_por_label(categoria) or str(categoria).strip().lower()
+
+            if categoria_normalizada == classe:
                 return True
 
         return False
@@ -204,7 +217,7 @@ class VisaoService:
             start_y = 30
             for idx, (cls_name, count) in enumerate(class_count.items()):
                 cv2.putText(frame, f"{cls_name}: {count}", (10, start_y + idx * 30),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, self.CORES.get('branco', (255, 255, 255)), 2)
 
             self.last_results = detections
 
@@ -253,46 +266,35 @@ class VisaoService:
 
                 zonas_do_objeto = [] # Lista para armazenar os IDs das zonas em que o objeto foi detectado
 
-                # Só desenha a caixa delimitadora se o objeto for uma pessoa ou se estiver 
-                # dentro de alguma zona configurada que requisita aquele objeto
                 # Itera sobre as zonas configuradas para verificar se o objeto está dentro de alguma delas
                 for monitoramento in zonas_configuradas:
 
                     if self.caixas_intersectam(xyxy, self.regiao_para_caixa(monitoramento.regiao)):
+
                         # Verifica se o objeto é requisitado na zona
-                        verificar = self.zona_requer_classe(monitoramento.epis_categoria, self.classe_epi_por_label(label_name), monitoramento.permitido)
-                        
-                        if verificar:
+                        if self.zona_requer_classe(monitoramento.epis_categoria, self.classe_epi_por_label(label_name), monitoramento.permitido):
                             zonas_do_objeto.append(monitoramento.id)
 
-                            print(f"✅ Objeto '{label_name}' detectado dentro da zona '{monitoramento.nome}' (ID: {monitoramento.id})")
-
-                            # Desenha a caixa delimitadora em verde se o objeto estiver dentro da zona e for requisitado
                             # Verifica se o objeto é 'com_...' ou 'sem_...' e se está dentro da zona que requer o EPI correspondente
                             if label_name.startswith("sem_"):
-                                #self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name} ID:{track_id}", (0, 0, 255))
+                                self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name} ID:{track_id}", self.CORES.get('vermelho', (0, 0, 255)))
                                 self.registrar_alerta_epi_incorreto(monitoramento, f"Sem EPI necessário: {self.classe_epi_por_label(label_name)}", track_id)
                             else:
-                                self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')} ID:{track_id} (Requisitado)", (0, 255, 0))
-                        else:
-                            #print(f"⚠️ Objeto '{label_name}' detectado dentro da zona '{monitoramento.nome}' (ID: {monitoramento.id}), mas não é requisitado.")
-
-                            if label_name.startswith("sem_"):
-                                #self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name} ID:{track_id}", (120, 120, 120))
-                                pass
-                            elif label_name.startswith("com_"):
-                                self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')} ID:{track_id} (Não Requisitado)", (0, 255, 255))
+                                # Verifica se o objeto é normal, caso seja desenha a caixa delimitadora em amarelo e registra o alerta de EPI incorreto
+                                if label_name.endswith("_normal"):
+                                    self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')} ID:{track_id}", self.CORES.get('amarelo', (0, 255, 255)))
+                                    self.registrar_alerta_epi_incorreto(monitoramento, f"Equipamento inadequado: {self.classe_epi_por_label(label_name)}", track_id)
+                                else:
+                                    self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')} ID:{track_id} (Requisitado)", self.CORES.get('verde', (0, 255, 0)))
 
                         # Verifica se o objeto é 'pessoa' e se está dentro da zona que não permite pessoas
                         if label_name == "pessoa" and not self.zona_requer_classe(monitoramento.epis_categoria, "pessoa", monitoramento.permitido):
-                            self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name} ID:{track_id} (Zona Restrita)", (0, 0, 255))
+                            self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name} ID:{track_id} (Zona Restrita)", self.CORES.get('vermelho', (0, 0, 255)))
                             self.registrar_alerta_epi_incorreto(monitoramento, "Pessoa em zona restrita", track_id)
-                        else:
-                            self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name} ID:{track_id}", (0, 255, 0))
 
 
                 if label_name == "pessoa" and self.zona_requer_classe(monitoramento.epis_categoria, "pessoa"):
-                    self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name} ID:{track_id}", (125, 0, 125))
+                    self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name} ID:{track_id}", self.CORES.get('magenta', (255, 0, 255)))
 
                 class_count[label_name] += 1
 
@@ -339,7 +341,7 @@ class VisaoService:
                         x, y = int(ponto[0]), int(ponto[1])
                         
                         if x > 0 and y > 0:
-                            cv2.circle(frame, (x, y), 4, (0, 255, 0), -1)
+                            cv2.circle(frame, (x, y), 4, self.CORES.get('verde', (0, 255, 0)), -1)
 
                     # 2. Desenhar os eixos (Esqueleto)
                     for p1, p2 in esqueleto_conexoes:
@@ -347,7 +349,7 @@ class VisaoService:
                         x2, y2 = int(individual[p2][0]), int(individual[p2][1])
 
                         if (x1 > 0 and y1 > 0) and (x2 > 0 and y2 > 0):
-                            cv2.line(frame, (x1, y1), (x2, y2), (255, 0, 255), 2)
+                            cv2.line(frame, (x1, y1), (x2, y2), self.CORES.get('magenta', (255, 0, 255)), 2)
 
 
     def registrar_alerta_epi_incorreto(self, monitoramento: Zona, evento: str, track_id: int) -> None:
@@ -368,6 +370,9 @@ class VisaoService:
 
         if setor:
             responsaveis = self.setores_repository.get_responsaveis_por_setor(setor.id)
+
+            if not responsaveis:
+                return
 
             for responsavel in responsaveis:
                 if self.alertas_service.criar_alerta(monitoramento.id_monitorar, responsavel, evento):
