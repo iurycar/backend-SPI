@@ -15,7 +15,7 @@ class AlertasService:
                 alertas_dict = {
                     'id': alerta.id,
                     'resolvido': alerta.resolvido,
-                    'data': alerta.data,
+                    'data': alerta.data_hora,
                     'id_monitorar': alerta.id_monitorar,
                     'id_usuario': alerta.id_usuario,
                     'evento': alerta.evento,
@@ -37,7 +37,7 @@ class AlertasService:
                 alertas_dict = {
                     'id': alerta.id,
                     'resolvido': alerta.resolvido,
-                    'data': alerta.data,
+                    'data': alerta.data_hora,
                     'id_monitorar': alerta.id_monitorar,
                     'id_usuario': alerta.id_usuario,
                     'evento': alerta.evento,
@@ -59,7 +59,7 @@ class AlertasService:
                 alertas_dict = {
                     'id': alerta.id,
                     'resolvido': alerta.resolvido,
-                    'data': alerta.data,
+                    'data': alerta.data_hora,
                     'id_monitorar': alerta.id_monitorar,
                     'id_usuario': alerta.id_usuario,
                     'evento': alerta.evento,
@@ -78,7 +78,7 @@ class AlertasService:
             alerta_dict = {
                 'id': alerta.id,
                 'resolvido': alerta.resolvido,
-                'data': alerta.data,
+                'data': alerta.data_hora,
                 'id_monitorar': alerta.id_monitorar,
                 'id_usuario': alerta.id_usuario,
                 'evento': alerta.evento,

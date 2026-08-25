@@ -17,7 +17,7 @@ class AlertasRepository:
                     alertas_lista.append(Alerta(
                         id=alerta[0],
                         resolvido=alerta[1],
-                        data=alerta[2].strftime("%Y-%m-%d %H:%M:%S"),
+                        data_hora=alerta[2].strftime("%Y-%m-%d %H:%M:%S"),
                         id_monitorar=alerta[3],
                         id_usuario=alerta[4],
                         evento=alerta[5],
@@ -41,7 +41,7 @@ class AlertasRepository:
                     alertas_lista.append(Alerta(
                         id=alerta[0],
                         resolvido=alerta[1],
-                        data=alerta[2].strftime("%Y-%m-%d %H:%M:%S"),
+                        data_hora=alerta[2].strftime("%Y-%m-%d %H:%M:%S"),
                         id_monitorar=alerta[3],
                         id_usuario=alerta[4],
                         evento=alerta[5],
@@ -65,7 +65,7 @@ class AlertasRepository:
                     alertas_lista.append(Alerta(
                         id=alerta[0],
                         resolvido=alerta[1],
-                        data=alerta[2].strftime("%Y-%m-%d %H:%M:%S"),
+                        data_hora=alerta[2].strftime("%Y-%m-%d %H:%M:%S"),
                         id_monitorar=alerta[3],
                         id_usuario=alerta[4],
                         evento=alerta[5],
@@ -86,7 +86,7 @@ class AlertasRepository:
                 return Alerta(
                     id=alerta[0],
                     resolvido=alerta[1],
-                    data=alerta[2].strftime("%Y-%m-%d %H:%M:%S"),
+                    data_hora=alerta[2].strftime("%Y-%m-%d %H:%M:%S"),
                     id_monitorar=alerta[3],
                     id_usuario=alerta[4],
                     evento=alerta[5],
@@ -131,7 +131,7 @@ class AlertasRepository:
 
     def criar_alerta(self, id_monitorar: int, id_usuario: int | None, evento: str) -> bool:
         with self.conn.cursor() as cursor:
-            query = "INSERT INTO alertas (resolvido, data, id_monitorar, id_usuario, evento) VALUES (FALSE, NOW(), %s, %s, %s);"
+            query = "INSERT INTO alertas (resolvido, data_hora, id_monitorar, id_usuario, evento) VALUES (FALSE, NOW(), %s, %s, %s);"
             cursor.execute(query, (id_monitorar, id_usuario, evento))
             self.conn.commit()
 

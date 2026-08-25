@@ -57,6 +57,37 @@ class SetoresRepository:
 
             return None
 
+    def get_setor_por_id_zona(self, zona_id: int) -> Setor | None:
+        with self.conn.cursor() as cursor:
+            # Faz uma consulta para obter o setor associado à zona
+            query = """SELECT s.id_setor, s.nome
+                FROM setores s
+                JOIN cameras c on c.id_setor = s.id_setor
+                JOIN zonas z on z.id_camera = c.id_camera WHERE z.id_zona = %s"""
+            
+            cursor.execute(query, (zona_id,))
+            setor = cursor.fetchone()
+
+            if setor:
+                return Setor(
+                    id=setor[0],
+                    nome=setor[1]
+                )
+
+            return None
+
+    def get_responsaveis_por_setor(self, setor_id: int) -> list[int] | None:
+        with self.conn.cursor() as cursor:
+            # Faz uma consulta para obter os IDs dos usuários responsáveis pelo setor
+            cursor.execute(
+                "SELECT id_usuario FROM responsabilidade WHERE id_setor = %s", (setor_id,))
+            responsaveis = cursor.fetchall()
+
+            if responsaveis:
+                return [responsavel[0] for responsavel in responsaveis]
+
+            return None
+
     def registrar_setor(self, nome: str) -> Setor | None:
         with self.conn.cursor() as cursor:
             cursor.execute(

@@ -3,5 +3,6 @@ path: '.'
 train: images/train
 val: images/val
 
-nc: 6
-names: ['Pessoa','Luva', 'Oculos', 'Capacete']
+
+nc: 10
+names: ['Pessoa','Com_luva','Com_oculos','Com_capacete','Com_oculos_normal','Com_mascara','Sem_luva','Sem_oculos','Sem_capacete','Sem_mascara']

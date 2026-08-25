@@ -11,7 +11,6 @@ from controller.usuario_routes import create_user_bp
 from controller.visao_routes import create_visao_bp
 from controller.zonas_routes import create_zonas_bp
 from controller.epi_routes import create_epi_bp
-from controller.visao_routes import visao_bp
 
 
 from connection.conn import Connection

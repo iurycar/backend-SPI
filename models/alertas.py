@@ -8,6 +8,6 @@ class Alerta:
     id_epi: int | None
     id_usuario: int | None
     id_camera: int | None
-    data: str
+    data_hora: str
     resolvido: bool = False
     evento: str = ""

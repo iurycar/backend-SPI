@@ -8,6 +8,7 @@ class ZonaDTO:
     y: int = 0
     largura: int = 1920
     altura: int = 1080
+    id_epi: int | None = None
 
     @classmethod
     def from_dict(cls, data: dict):
@@ -20,6 +21,7 @@ class ZonaDTO:
         y = data.get('y', 0)
         largura = data.get('largura', 1920)
         altura = data.get('altura', 1080)
+        id_epi = data.get('id_epi', None)
 
         if nome is not None and not isinstance(nome, str):
             raise ValueError("Nome must be a string or None.")
@@ -27,6 +29,10 @@ class ZonaDTO:
             raise ValueError("ID da câmera must be an integer.")
         if not isinstance(x, int) or not isinstance(y, int) or not isinstance(largura, int) or not isinstance(altura, int):
             raise ValueError("Coordinates must be integers.")
+        if not isinstance(largura, int) or not isinstance(altura, int):
+            raise ValueError("Width and height must be integers.")
+        if not isinstance(id_epi, int) and id_epi is not None:
+            raise ValueError("ID do EPI must be an integer or None.")
 
         return cls(
             nome=nome,
@@ -34,5 +40,6 @@ class ZonaDTO:
             x=x,
             y=y,
             largura=largura,
-            altura=altura
+            altura=altura,
+            id_epi=id_epi
         )

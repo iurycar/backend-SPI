@@ -15,3 +15,4 @@ assets/modelo/test_camera.py
 core/validators.py
 assets/modelo/weights/best.pt
 assets/modelo/weights/yolov8m.pt
+numerador.py

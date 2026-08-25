@@ -54,10 +54,12 @@ class EpiService:
         epi = self.epi_repository.registrar_epi(
             epi_dto.nome,
             epi_dto.categoria,
+            epi_dto.certificado,
             epi_dto.validade,
             epi_dto.estoque,
             epi_dto.quantidade_min,
-            epi_dto.em_uso
+            epi_dto.em_uso,
+            epi_dto.id_epi
         )
 
         if epi:
@@ -68,7 +70,8 @@ class EpiService:
                 'validade': epi.validade,
                 'estoque': epi.estoque,
                 'quantidade_min': epi.quantidade_min,
-                'em_uso': epi.em_uso
+                'em_uso': epi.em_uso,
+                "id_epi": epi.id_epi
             }
 
         return None
@@ -84,6 +87,7 @@ class EpiService:
             epi_id,
             epi_dto.nome,
             epi_dto.categoria,
+            epi_dto.certificado,
             epi_dto.validade,
             epi_dto.estoque,
             epi_dto.quantidade_min,
@@ -95,6 +99,7 @@ class EpiService:
                 'id': epi.id,
                 'nome': epi.nome,
                 'categoria': epi.categoria,
+                'certificado': epi.certificado,
                 'validade': epi.validade,
                 'estoque': epi.estoque,
                 'quantidade_min': epi.quantidade_min,
