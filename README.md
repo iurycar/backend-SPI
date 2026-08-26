@@ -89,9 +89,9 @@ O servidor estará disponível em `http://127.0.0.1:5000` e pronto para receber 
 - `GET /detections` - Retorna a lista de detecções
 
 ### Zonas
-- `GET /zonas` - Lista todas as zonas
-- `GET /zonas/<int:zona_id>` - Obtém a zona por ID
-- `POST /zonas/registrar` - Registra uma nova zona
+- `GET /zonas` - Lista todas as zonas ✅
+- `GET /zonas/<int:zona_id>` - Obtém a zona por ID ✅
+- `POST /zonas/registrar` - Registra uma nova zona 
 - `PUT /zonas/<int:zona_id>` - Atualiza uma zona por ID
 - `DELETE /zonas/<int:zona_id>` - Deleta uma zona por ID
 

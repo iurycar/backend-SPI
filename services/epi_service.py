@@ -58,7 +58,8 @@ class EpiService:
             epi_dto.validade,
             epi_dto.estoque,
             epi_dto.quantidade_min,
-            epi_dto.em_uso
+            epi_dto.em_uso,
+            epi_dto.id_epi
         )
 
         if epi:
@@ -69,7 +70,8 @@ class EpiService:
                 'validade': epi.validade,
                 'estoque': epi.estoque,
                 'quantidade_min': epi.quantidade_min,
-                'em_uso': epi.em_uso
+                'em_uso': epi.em_uso,
+                "id_epi": epi.id_epi
             }
 
         return None

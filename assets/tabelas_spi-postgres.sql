@@ -46,6 +46,7 @@ CREATE TABLE zonas (
 	y				INTEGER		NOT NULL,
 	largura			INTEGER		NOT NULL,
 	altura			INTEGER		NOT NULL,
+	permitido		BOOLEAN		NOT NULL DEFAULT TRUE,
 	id_camera		INTEGER 	NOT NULL	REFERENCES cameras(id_camera)		ON DELETE CASCADE
 );
 
@@ -73,5 +74,6 @@ CREATE TABLE alertas (
 	data_hora		TIMESTAMP	NOT NULL	DEFAULT	CURRENT_TIMESTAMP,
 	id_monitorar	INTEGER 	NOT NULL	REFERENCES monitorar(id_monitorar)	ON DELETE RESTRICT,
 	id_usuario		INTEGER 	REFERENCES usuarios(id_usuario)					ON DELETE SET NULL,
-	evento			VARCHAR(40) NOT NULL	DEFAULT "Sem EPI ou zona proibida"
+	evento			VARCHAR(40) NOT NULL	DEFAULT 'Sem EPI ou zona proibida',
+	severidade		INTEGER		NOT NULL	DEFAULT 1
 );
