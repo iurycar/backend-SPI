@@ -14,5 +14,7 @@ assets/modelo/labels/val
 assets/modelo/test_camera.py
 core/validators.py
 assets/modelo/weights/best.pt
-assets/modelo/weights/yolov8m.pt
+assets/modelo/treinamento/weights/yolov8m.pt
+assets/modelo/treinamento/weights/yolov8m-pose.pt
+assets/modelo/treinamento/weights/yolov8s-pose.pt
 numerador.py

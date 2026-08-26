@@ -3,6 +3,7 @@ from ultralytics import YOLO
 import numpy as np
 import unicodedata
 import platform
+import math
 import time
 import cv2
 import os
@@ -222,7 +223,7 @@ class VisaoService:
             self.last_results = detections
 
             # Realiza a estimativa de pose no frame
-            self.pose_estimation(frame)
+            self.pose_estimation(frame, camera_id)
 
             # Codifica o frame em JPEG e o envia como resposta para o cliente
             sucesso, buffer = cv2.imencode('.jpg', frame)
@@ -310,48 +311,6 @@ class VisaoService:
         return detections, class_count
 
 
-    def pose_estimation(self, frame):
-        """
-        Implementa a lógica de estimativa de pose para detectar os pontos 
-        e desenhar os eixos (esqueleto) da pessoa.
-        """
-        # Realiza a estimativa de pose no frame usando o modelo YOLO para pose
-        results = modelo_pose.predict(frame, conf=0.5, verbose=False)
-
-        # Define as conexões do esqueleto com base nos pontos-chave detectados
-        esqueleto_conexoes = [
-            (0, 1), (0, 2), (1, 3), (2, 4),            # Rosto (Olhos, Nariz e Orelhas)
-            (5, 6), (5, 7), (7, 9), (6, 8), (8, 10),   # Braços e Ombros
-            (5, 11), (6, 12), (11, 12),                # Tronco
-            (11, 13), (13, 15), (12, 14), (14, 16)     # Pernas
-        ]
-
-        # Itera sobre os resultados da estimativa de pose
-        for result in results:
-            # Verifica se keypoints não é nulo E se contém alguma detecção
-            if result.keypoints is not None and len(result.keypoints) > 0:
-                keypoints_list = result.keypoints.xy.cpu().numpy()
-
-                for individual in keypoints_list:
-                    if len(individual) < 17:
-                        continue
-
-                    # 1. Desenhar os pontos (Articulações)
-                    for ponto in individual:
-                        x, y = int(ponto[0]), int(ponto[1])
-                        
-                        if x > 0 and y > 0:
-                            cv2.circle(frame, (x, y), 4, self.CORES.get('verde', (0, 255, 0)), -1)
-
-                    # 2. Desenhar os eixos (Esqueleto)
-                    for p1, p2 in esqueleto_conexoes:
-                        x1, y1 = int(individual[p1][0]), int(individual[p1][1])
-                        x2, y2 = int(individual[p2][0]), int(individual[p2][1])
-
-                        if (x1 > 0 and y1 > 0) and (x2 > 0 and y2 > 0):
-                            cv2.line(frame, (x1, y1), (x2, y2), self.CORES.get('magenta', (255, 0, 255)), 2)
-
-
     def registrar_alerta_epi_incorreto(self, monitoramento: Zona, evento: str, track_id: int, severidade: int = 1) -> None:
         """
         Registra um alerta, evitando duplicidade por um curto período.
@@ -377,6 +336,143 @@ class VisaoService:
             for responsavel in responsaveis:
                 if self.alertas_service.criar_alerta(monitoramento.id_monitorar, responsavel, evento):
                     self._alert_cache[cache_chave] = agora
+
+
+    def avaliar_postura(self, ombro_esq, ombro_dir, quadril_esq, quadril_dir):
+        """
+            Avalia a postura combinando o ângulo de inclinação (visão lateral) 
+            e a proporção do tronco (visão frontal).
+        """
+        # Calcula os pontos médios dos ombros e quadris
+        pt_ombro = ((ombro_esq[0] + ombro_dir[0]) / 2, (ombro_esq[1] + ombro_dir[1]) / 2)
+        pt_quadril = ((quadril_esq[0] + quadril_dir[0]) / 2, (quadril_esq[1] + quadril_dir[1]) / 2)
+        
+        # Calcula o ângulo de inclinação do tronco usando a função atan2
+        dx = pt_ombro[0] - pt_quadril[0]
+        dy = pt_quadril[1] - pt_ombro[1]
+        angulo = math.degrees(math.atan2(abs(dx), abs(dy)))
+        
+        # Calcula a largura dos ombros usando a distância Euclidiana
+        largura_ombros = math.dist(ombro_esq, ombro_dir)
+        
+        # Distância Euclidiana entre ombro e quadril (altura aparente do tronco)
+        altura_tronco = math.dist(pt_ombro, pt_quadril)
+        
+        # Evitar divisão por zero
+        largura_ombros = max(largura_ombros, 1) 
+        
+        # Calcula a proporção
+        razao_tronco = altura_tronco / largura_ombros
+        
+        # Avaliação Híbrida
+        # Ajuste estes limites de acordo com a altura e ângulo real da sua câmera na fábrica!
+        LIMITE_ANGULO = 45 # graus
+        LIMITE_RAZAO_FRONTAL = 1.1 # Se a altura do tronco for quase igual à largura dos ombros
+        
+        is_ma_postura = False
+        motivo = ""
+        
+        if angulo > LIMITE_ANGULO:
+            is_ma_postura = True
+            motivo = f"Inclinacao Lateral ({int(angulo)} graus)"
+        elif razao_tronco < LIMITE_RAZAO_FRONTAL:
+            is_ma_postura = True
+            motivo = f"Curvado de Frente (Razao: {razao_tronco:.2f})"
+            
+        return is_ma_postura, motivo, (int(pt_ombro[0]), int(pt_ombro[1])), (int(pt_quadril[0]), int(pt_quadril[1]))
+
+
+    def pose_estimation(self, frame, camera_id):
+        """
+        Implementa a lógica de estimativa de pose, desenha o esqueleto e 
+        calcula a inclinação do tronco para gerar alertas de má postura.
+        """
+        # Mudança: Usar track para obter o ID da pessoa (necessário para o sistema de alertas não fazer spam)
+        results = modelo_pose.track(frame, persist=True, conf=0.5, verbose=False)
+
+        esqueleto_conexoes = [
+            (0, 1), (0, 2), (1, 3), (2, 4),            
+            (5, 6), (5, 7), (7, 9), (6, 8), (8, 10),   
+            (5, 11), (6, 12), (11, 12),                
+            (11, 13), (13, 15), (12, 14), (14, 16)     
+        ]
+
+        for result in results:
+            if result.keypoints is not None and len(result.keypoints) > 0:
+                keypoints_list = result.keypoints.xy.cpu().numpy()
+                
+                # Tenta pegar os IDs das pessoas rastreadas
+                track_ids = result.boxes.id.int().cpu().tolist() if result.boxes and result.boxes.id is not None else [-1] * len(keypoints_list)
+
+                # Itera sobre cada conjunto de keypoints (uma pessoa) e desenha os pontos e linhas do esqueleto
+                for idx, individual in enumerate(keypoints_list):
+                    if len(individual) < 17:
+                        continue
+
+                    track_id = track_ids[idx]
+
+                    # Desenhar pontos e linhas (Seu código original mantido)
+                    for ponto in individual:
+                        x, y = int(ponto[0]), int(ponto[1])
+                        if x > 0 and y > 0:
+                            cv2.circle(frame, (x, y), 4, self.CORES.get('verde', (0, 255, 0)), -1)
+
+                    # Desenhar as conexões do esqueleto
+                    for p1, p2 in esqueleto_conexoes:
+                        x1, y1 = int(individual[p1][0]), int(individual[p1][1])
+                        x2, y2 = int(individual[p2][0]), int(individual[p2][1])
+                        if (x1 > 0 and y1 > 0) and (x2 > 0 and y2 > 0):
+                            cv2.line(frame, (x1, y1), (x2, y2), self.CORES.get('magenta', (255, 0, 255)), 2)
+
+                    # Pega os pontos dos ombros e quadris
+                    ombro_esq, ombro_dir = individual[5], individual[6]
+                    quadril_esq, quadril_dir = individual[11], individual[12]
+
+                    cor_coluna = self.CORES.get('ciano', (0, 255, 0))
+                    
+                    # Verifica se a câmera detectou os 4 pontos necessários com confiança
+                    if all(p[0] > 0 and p[1] > 0 for p in [ombro_esq, ombro_dir, quadril_esq, quadril_dir]):
+                        is_ma_postura, motivo, pt_ombro, pt_quadril = self.avaliar_postura(ombro_esq, ombro_dir, quadril_esq, quadril_dir)
+
+                        if is_ma_postura:
+                            cor_coluna = self.CORES.get('vermelho', (0, 0, 255))
+                            cv2.putText(frame, f"ALERTA: {motivo}", 
+                                        (pt_ombro[0] - 60, pt_ombro[1] - 20),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, cor_coluna, 2)
+                            
+                            if track_id != -1:
+                                self.registrar_alerta_postura(track_id, motivo)
+
+                        cv2.line(frame, pt_ombro, pt_quadril, cor_coluna, 4)
+
+
+    def registrar_alerta_postura(self, camera_id: int, track_id: int) -> None:
+        """
+        Registra um alerta de má postura no banco de dados, evitando duplicidade por ID.
+        """
+
+        # A chave do cache usa 'postura' para não conflitar com EPIs do mesmo trabalhador
+        cache_chave = ('postura_fabrica', 'inclinacao_excessiva', track_id)
+        agora = time.monotonic()
+        ultimo_alerta = self._alert_cache.get(cache_chave, 0)
+
+        # Cooldown de 10 segundos antes de alertar de novo sobre a mesma pessoa
+        if agora - ultimo_alerta < 10:
+            return
+
+        setor = self.setores_repository.get_setor_por_id_camera(camera_id)
+        
+        if setor:
+            responsaveis = self.setores_repository.get_responsaveis_por_setor(setor.id)
+
+            if not responsaveis:
+                return
+
+            for responsavel in responsaveis:
+                sucesso = self.alertas_service.criar_alerta(camera_id, responsavel, evento = f"Má postura detectada.")
+                if sucesso:
+                    self._alert_cache[cache_chave] = agora
+                    print(f"⚠️ Má postura detectada - ID: {track_id}")
 
 
     def desenhar_caixa_delimitadora(self, frame, box, label, color=(0, 255, 0)):

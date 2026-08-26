@@ -88,6 +88,25 @@ class SetoresRepository:
 
             return None
 
+    def get_setor_por_id_camera(self, camera_id: int) -> Setor | None:
+        with self.conn.cursor() as cursor:
+            # Faz uma consulta para obter o setor associado à câmera
+            query = """SELECT s.id_setor, s.nome
+                FROM setores s
+                JOIN cameras c on c.id_setor = s.id_setor
+                WHERE c.id_camera = %s"""
+            
+            cursor.execute(query, (camera_id,))
+            setor = cursor.fetchone()
+
+            if setor:
+                return Setor(
+                    id=setor[0],
+                    nome=setor[1]
+                )
+
+            return None
+
     def get_setor_por_id_zona(self, zona_id: int) -> Setor | None:
         with self.conn.cursor() as cursor:
             # Faz uma consulta para obter o setor associado à zona
