@@ -16,7 +16,7 @@ from models.zonas import Zona
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, 'assets', 'modelo', 'treinamento', 'weights', 'best.pt')
-MODEL_PATH_POSE = os.path.join(BASE_DIR, 'assets', 'modelo', 'treinamento', 'weights', 'yolov8n-pose.pt')
+MODEL_PATH_POSE = os.path.join(BASE_DIR, 'assets', 'modelo', 'treinamento', 'weights', 'yolov8s-pose.pt')
 
 modelo = YOLO(MODEL_PATH)
 modelo_pose = YOLO(MODEL_PATH_POSE)
@@ -278,15 +278,15 @@ class VisaoService:
 
                             # Verifica se o objeto é 'com_...' ou 'sem_...' e se está dentro da zona que requer o EPI correspondente
                             if label_name.startswith("sem_"):
-                                self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name} ID:{track_id}", self.CORES.get('vermelho', (0, 0, 255)))
+                                self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name}", self.CORES.get('vermelho', (0, 0, 255)))
                                 self.registrar_alerta_epi_incorreto(monitoramento, f"Sem EPI necessário: {self.classe_epi_por_label(label_name)}", track_id, severidade=2)
                             else:
                                 # Verifica se o objeto é normal, caso seja desenha a caixa delimitadora em amarelo e registra o alerta de EPI incorreto
                                 if label_name.endswith("_normal"):
-                                    self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')} ID:{track_id}", self.CORES.get('amarelo', (0, 255, 255)))
+                                    self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')}", self.CORES.get('amarelo', (0, 255, 255)))
                                     self.registrar_alerta_epi_incorreto(monitoramento, f"Equipamento inadequado: {self.classe_epi_por_label(label_name)}", track_id, severidade=1)
                                 else:
-                                    self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')} ID:{track_id} (Requisitado)", self.CORES.get('verde', (0, 255, 0)))
+                                    self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')} (Requisitado)", self.CORES.get('verde', (0, 255, 0)))
 
                         # Verifica se o objeto é 'pessoa' e se está dentro da zona que não permite pessoas
                         if label_name == "pessoa" and not self.zona_requer_classe(monitoramento.epis_categoria, "pessoa", monitoramento.permitido):
@@ -366,7 +366,7 @@ class VisaoService:
         
         # Avaliação Híbrida
         # Ajuste estes limites de acordo com a altura e ângulo real da sua câmera na fábrica!
-        LIMITE_ANGULO = 45 # graus
+        LIMITE_ANGULO = 30 # graus
         LIMITE_RAZAO_FRONTAL = 1.1 # Se a altura do tronco for quase igual à largura dos ombros
         
         is_ma_postura = False
