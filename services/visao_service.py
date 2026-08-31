@@ -338,48 +338,96 @@ class VisaoService:
                     self._alert_cache[cache_chave] = agora
 
 
-    def avaliar_postura(self, ombro_esq, ombro_dir, quadril_esq, quadril_dir):
+    def avaliar_postura(self, metodo, **kargs):
         """
             Avalia a postura combinando o ângulo de inclinação (visão lateral) 
             e a proporção do tronco (visão frontal).
         """
-        # Calcula os pontos médios dos ombros e quadris
-        pt_ombro = ((ombro_esq[0] + ombro_dir[0]) / 2, (ombro_esq[1] + ombro_dir[1]) / 2)
-        pt_quadril = ((quadril_esq[0] + quadril_dir[0]) / 2, (quadril_esq[1] + quadril_dir[1]) / 2)
-        
-        # Calcula o ângulo de inclinação do tronco usando a função atan2
-        dx = pt_ombro[0] - pt_quadril[0]
-        dy = pt_quadril[1] - pt_ombro[1]
-        angulo = math.degrees(math.atan2(abs(dx), abs(dy)))
-        
-        # Calcula a largura dos ombros usando a distância Euclidiana
-        largura_ombros = math.dist(ombro_esq, ombro_dir)
-        
-        # Distância Euclidiana entre ombro e quadril (altura aparente do tronco)
-        altura_tronco = math.dist(pt_ombro, pt_quadril)
-        
-        # Evitar divisão por zero
-        largura_ombros = max(largura_ombros, 1) 
-        
-        # Calcula a proporção
-        razao_tronco = altura_tronco / largura_ombros
-        
-        # Avaliação Híbrida
-        # Ajuste estes limites de acordo com a altura e ângulo real da sua câmera na fábrica!
-        LIMITE_ANGULO = 30 # graus
-        LIMITE_RAZAO_FRONTAL = 1.1 # Se a altura do tronco for quase igual à largura dos ombros
-        
-        is_ma_postura = False
-        motivo = ""
-        
-        if angulo > LIMITE_ANGULO:
-            is_ma_postura = True
-            motivo = f"Inclinacao Lateral ({int(angulo)} graus)"
-        elif razao_tronco < LIMITE_RAZAO_FRONTAL:
-            is_ma_postura = True
-            motivo = f"Curvado de Frente (Razao: {razao_tronco:.2f})"
+
+        is_ma_postura: bool = False
+        motivo: str = ""
+
+        # =============
+        # Método de cálculo do ângulo de inclinação (maior que 30 graus é considerado má postura)
+        # =============
+        if metodo == "tronco":
+            ombro_esq: tuple[float, float] = kargs.get('ombro_esq')
+            ombro_dir: tuple[float, float] = kargs.get('ombro_dir')
+            quadril_esq: tuple[float, float] = kargs.get('quadril_esq')
+            quadril_dir: tuple[float, float] = kargs.get('quadril_dir')
+
+            # Calcula os pontos médios dos ombros e quadris
+            pt_ombro: tuple[float, float] = ((ombro_esq[0] + ombro_dir[0]) / 2, (ombro_esq[1] + ombro_dir[1]) / 2)
+            pt_quadril: tuple[float, float] = ((quadril_esq[0] + quadril_dir[0]) / 2, (quadril_esq[1] + quadril_dir[1]) / 2)
             
-        return is_ma_postura, motivo, (int(pt_ombro[0]), int(pt_ombro[1])), (int(pt_quadril[0]), int(pt_quadril[1]))
+            # Calcula o ângulo de inclinação do tronco usando a função atan2
+            dx: float = pt_ombro[0] - pt_quadril[0]
+            dy: float = pt_quadril[1] - pt_ombro[1]
+            angulo: float = math.degrees(math.atan2(abs(dx), abs(dy)))
+            
+            # Calcula a largura dos ombros usando a distância Euclidiana
+            largura_ombros: float = math.dist(ombro_esq, ombro_dir)
+            
+            # Distância Euclidiana entre ombro e quadril (altura aparente do tronco)
+            altura_tronco: float = math.dist(pt_ombro, pt_quadril)
+            
+            # Evitar divisão por zero
+            largura_ombros: float = max(largura_ombros, 1) 
+            
+            # Calcula a proporção
+            razao_tronco: float = altura_tronco / largura_ombros
+            
+            # Avaliação Híbrida
+            # Ajuste estes limites de acordo com a altura e ângulo real da sua câmera na fábrica!
+            LIMITE_ANGULO = 30 # graus
+            LIMITE_RAZAO_FRONTAL = 1.1 # Se a altura do tronco for quase igual à largura dos ombros
+            
+            if angulo > LIMITE_ANGULO:
+                is_ma_postura = True
+                motivo = f"Inclinacao Lateral ({int(angulo)} graus)"
+            elif razao_tronco < LIMITE_RAZAO_FRONTAL:
+                is_ma_postura = True
+                motivo = f"Curvado de Frente (Razao: {razao_tronco:.2f})"
+
+            return is_ma_postura, motivo, (int(pt_ombro[0]), int(pt_ombro[1])), (int(pt_quadril[0]), int(pt_quadril[1]))
+
+        # ==============
+        # Método de cálculo para rotação excessiva do tronco
+        # ==============
+        elif metodo == "rotacao":
+            ombro_esq: tuple[float, float] = kargs.get('ombro_esq')
+            ombro_dir: tuple[float, float] = kargs.get('ombro_dir')
+            quadril_esq: tuple[float, float] = kargs.get('quadril_esq')
+            quadril_dir: tuple[float, float] = kargs.get('quadril_dir')
+
+            # Verifica o ângulo de rotação entre os ombros e quadris, caso seja maior que 30 graus, considera má postura
+            dx_ombros: float = ombro_dir[0] - ombro_esq[0]
+            dy_ombros: float = ombro_dir[1] - ombro_esq[1]
+            angulo_ombros: float = math.degrees(math.atan2(abs(dy_ombros), abs(dx_ombros)))
+
+            if angulo_ombros > 30:
+                is_ma_postura = True
+                motivo =  f"Rotação Excessiva do Tronco ({int(angulo_ombros)} graus)"
+
+            return is_ma_postura, motivo, (int(ombro_esq[0]), int(ombro_esq[1])), (int(ombro_dir[0]), int(ombro_dir[1]))
+
+        # ==============
+        # Método de cálculo para indivíduo caído no chão
+        # ==============
+        elif metodo == "queda":
+            ombro_esq: tuple[float, float] = kargs.get('ombro_esq')
+            ombro_dir: tuple[float, float] = kargs.get('ombro_dir')
+            quadril_esq: tuple[float, float] = kargs.get('quadril_esq')
+            quadril_dir: tuple[float, float] = kargs.get('quadril_dir')
+
+            # Avalia se a pessoa está caída no chão, verificando a posição dos ombros e quadris em relação ao eixo vertical da imagem. Se a altura dos ombros e quadris estiver muito baixa (próxima do chão), considera-se que a pessoa está caída.
+            altura = min(ombro_esq[1], ombro_dir[1], quadril_esq[1], quadril_dir[1])
+
+            if altura > 400:  # Ajuste este valor de acordo com a altura da câmera e a posição do chão na imagem
+                is_ma_postura = True
+                motivo = "Pessoa caída no chão"
+
+            return is_ma_postura, motivo, (int(ombro_esq[0]), int(ombro_esq[1])), (int(quadril_dir[0]), int(quadril_dir[1]))
 
 
     def pose_estimation(self, frame, camera_id):
@@ -429,24 +477,46 @@ class VisaoService:
                     quadril_esq, quadril_dir = individual[11], individual[12]
 
                     cor_coluna = self.CORES.get('ciano', (0, 255, 0))
-                    
-                    # Verifica se a câmera detectou os 4 pontos necessários com confiança
-                    if all(p[0] > 0 and p[1] > 0 for p in [ombro_esq, ombro_dir, quadril_esq, quadril_dir]):
-                        is_ma_postura, motivo, pt_ombro, pt_quadril = self.avaliar_postura(ombro_esq, ombro_dir, quadril_esq, quadril_dir)
 
-                        if is_ma_postura:
-                            cor_coluna = self.CORES.get('vermelho', (0, 0, 255))
-                            cv2.putText(frame, f"ALERTA: {motivo}", 
-                                        (pt_ombro[0] - 60, pt_ombro[1] - 20),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, cor_coluna, 2)
+                    for p in [ombro_esq, ombro_dir, quadril_esq, quadril_dir]:
+                        if p[0] <= 0 or p[1] <= 0:
+                            cor_coluna = self.CORES.get('cinza', (120, 120, 120))
+                            break
+                        else:
+                            is_ma_postura, motivo, pt_ombro, pt_quadril = self.avaliar_postura("tronco", ombro_esq, ombro_dir, quadril_esq, quadril_dir)
                             
-                            if track_id != -1:
-                                self.registrar_alerta_postura(track_id, motivo)
+                            if is_ma_postura:
+                                cor_coluna = self.CORES.get('vermelho', (0, 0, 255))
+                                cv2.putText(frame, f"ALERTA: {motivo}", 
+                                            (pt_ombro[0] - 60, pt_ombro[1] - 20),
+                                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, cor_coluna, 2)
+                                
+                                if track_id != -1:
+                                    self.registrar_alerta_postura(track_id, motivo)
+    
+                            cv2.line(frame, pt_ombro, pt_quadril, cor_coluna, 4)
 
-                        cv2.line(frame, pt_ombro, pt_quadril, cor_coluna, 4)
+                            is_ma_postura_rotacao, motivo_rotacao, _, _ = self.avaliar_postura("rotacao", ombro_esq, ombro_dir, quadril_esq, quadril_dir)
+                            
+                            if is_ma_postura_rotacao:
+                                cv2.putText(frame, f"ALERTA: {motivo_rotacao}", 
+                                            (pt_ombro[0] - 60, pt_ombro[1] - 40),
+                                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.CORES.get('vermelho', (0, 0, 255)), 2)
+                                
+                                if track_id != -1:
+                                    self.registrar_alerta_postura(track_id, motivo_rotacao)
 
+                            is_caido, motivo_queda, _, _ = self.avaliar_postura("queda", ombro_esq, ombro_dir, quadril_esq, quadril_dir)
 
-    def registrar_alerta_postura(self, camera_id: int, track_id: int) -> None:
+                            if is_caido:
+                                cv2.putText(frame, f"ALERTA: {motivo_queda}", 
+                                            (pt_ombro[0] - 60, pt_ombro[1] - 60),
+                                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.CORES.get('vermelho', (0, 0, 255)), 2)
+                                
+                                if track_id != -1:
+                                    self.registrar_alerta_postura(camera_id, track_id, motivo_queda, severidade=3)
+
+    def registrar_alerta_postura(self, camera_id: int, track_id: int, motivo: str, severidade: int = 1) -> None:
         """
         Registra um alerta de má postura no banco de dados, evitando duplicidade por ID.
         """
@@ -469,7 +539,7 @@ class VisaoService:
                 return
 
             for responsavel in responsaveis:
-                sucesso = self.alertas_service.criar_alerta(camera_id, responsavel, evento = f"Má postura detectada.")
+                sucesso = self.alertas_service.criar_alerta(camera_id, responsavel, evento = motivo, severidade=severidade)
                 if sucesso:
                     self._alert_cache[cache_chave] = agora
                     print(f"⚠️ Má postura detectada - ID: {track_id}")
@@ -490,17 +560,3 @@ class VisaoService:
         processo = unicodedata.normalize("NFD", texto)
         return processo.encode("ascii", "ignore").decode("utf-8")
 
-class Camera:
-    def __init__(self, camera_id: int, backend: int):
-        self.camera_id = camera_id
-        self.backend = backend
-        self.cap = cv2.VideoCapture(camera_id, backend)
-
-    def is_opened(self) -> bool:
-        return self.cap.isOpened()
-
-    def read_frame(self):
-        return self.cap.read()
-
-    def release(self):
-        self.cap.release()

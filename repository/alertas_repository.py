@@ -134,10 +134,10 @@ class AlertasRepository:
 
             return cursor.rowcount > 0
 
-    def criar_alerta(self, id_monitorar: int, id_usuario: int | None, evento: str) -> bool:
+    def criar_alerta(self, id_monitorar: int, id_usuario: int | None, evento: str, severidade: int = 1) -> bool:
         with self.conn.cursor() as cursor:
-            query = "INSERT INTO alertas (resolvido, data_hora, id_monitorar, id_usuario, evento) VALUES (FALSE, NOW(), %s, %s, %s);"
-            cursor.execute(query, (id_monitorar, id_usuario, evento))
+            query = "INSERT INTO alertas (resolvido, data_hora, id_monitorar, id_usuario, evento, severidade) VALUES (FALSE, NOW(), %s, %s, %s, %s);"
+            cursor.execute(query, (id_monitorar, id_usuario, evento, severidade))
             self.conn.commit()
 
             return cursor.rowcount > 0

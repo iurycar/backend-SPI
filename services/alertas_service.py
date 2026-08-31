@@ -97,8 +97,8 @@ class AlertasService:
     def marcar_alerta_resolvido(self, id_alerta: int) -> bool:
         return self.alertas_repository.marcar_alerta_resolvido(id_alerta)
 
-    def criar_alerta(self, id_monitorar: int, id_usuario: int | None, evento: str) -> bool:
-        return self.alertas_repository.criar_alerta(id_monitorar, id_usuario, evento)
+    def criar_alerta(self, id_monitorar: int, id_usuario: int | None, evento: str, severidade: int = 1) -> bool:
+        return self.alertas_repository.criar_alerta(id_monitorar, id_usuario, evento, severidade)
 
     def deletar_alerta(self, id_alerta: int) -> bool:
         return self.alertas_repository.deletar_alerta(id_alerta)
