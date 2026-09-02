@@ -18,9 +18,6 @@ BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, 'assets', 'modelo', 'treinamento', 'weights', 'best.pt')
 MODEL_PATH_POSE = os.path.join(BASE_DIR, 'assets', 'modelo', 'treinamento', 'weights', 'yolov8s-pose.pt')
 
-modelo = YOLO(MODEL_PATH)
-modelo_pose = YOLO(MODEL_PATH_POSE)
-
 class VisaoService:
     EPI_CLASSE_POR_LABEL = {
         'com_capacete': 'capacete',
@@ -54,14 +51,24 @@ class VisaoService:
         self.last_results = []
         self.cap = None
         self._alert_cache = {}
+        self.modelo = None
+        self.modelo_pose = None
 
+    def ensure_models_loaded(self):
+        if self.modelo is None:
+            self.modelo = YOLO(MODEL_PATH)
+        if self.modelo_pose is None:
+            self.modelo_pose = YOLO(MODEL_PATH_POSE)
+
+    def open_camera(self):
         cam_idx, backend = self.find_camera()
 
         if cam_idx is None:
             print("❌ Nenhuma câmera disponível encontrada.")
-            return
-    
+            return None
+
         self.cap = cv2.VideoCapture(cam_idx, backend)
+        return self.cap
 
 
     def get_plataform_camera(self):
@@ -192,47 +199,104 @@ class VisaoService:
         """
         Gera frames da câmera especificada, aplicando detecção de objetos e verificando se eles estão dentro das zonas configuradas.
         """
-
+        self.ensure_models_loaded()
         zonas_configuradas = self.zonas_de_monitoramento(camera_id)
 
         if not zonas_configuradas:
             print(f"❌ Nenhuma zona configurada para a câmera com ID {camera_id}.")
             return
-        
+
+        if self.cap is None:
+            self.open_camera()
+
+        if self.cap is None or not self.cap.isOpened():
+            return
+
         while self.cap.isOpened():
-            # Lê o próximo frame da câmera
             sucesso, frame = self.cap.read()
 
             if not sucesso:
                 break
 
-            # Realiza a detecção de objetos no frame
             detections, class_count = self.object_detection(frame, zonas_configuradas)
 
-            # Atualiza a lista de detecções e desenha as zonas no frame
             for monitoramento in zonas_configuradas:
                 nome = self.remover_acentos(monitoramento.nome)
                 self.desenhar_zona(frame, monitoramento.regiao, nome)
 
-            # Exibe a contagem de cada classe detectada no canto superior esquerdo do frame
             start_y = 30
             for idx, (cls_name, count) in enumerate(class_count.items()):
                 cv2.putText(frame, f"{cls_name}: {count}", (10, start_y + idx * 30),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.7, self.CORES.get('branco', (255, 255, 255)), 2)
 
             self.last_results = detections
-
-            # Realiza a estimativa de pose no frame
             self.pose_estimation(frame, camera_id)
 
-            # Codifica o frame em JPEG e o envia como resposta para o cliente
             sucesso, buffer = cv2.imencode('.jpg', frame)
+            if not sucesso:
+                continue
+
             frame_bytes = buffer.tobytes()
 
             yield (
                 b'--frame\r\n'
                 b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n'
             )
+
+    def run_video_loop(self, camera_id: int = 1, frame_queue=None, last_results=None, stop_event=None):
+        """Executa o loop de processamento em um processo separado."""
+        self.ensure_models_loaded()
+        zonas_configuradas = self.zonas_de_monitoramento(camera_id)
+
+        if not zonas_configuradas:
+            if last_results is not None:
+                last_results['detections'] = []
+                last_results['class_count'] = {}
+            return
+
+        self.cap = self.open_camera()
+
+        if self.cap is None or not self.cap.isOpened():
+            if last_results is not None:
+                last_results['detections'] = []
+                last_results['class_count'] = {}
+            return
+
+        try:
+            while not (stop_event is not None and stop_event.is_set()):
+                sucesso, frame = self.cap.read()
+
+                if not sucesso:
+                    break
+
+                detections, class_count = self.object_detection(frame, zonas_configuradas)
+
+                for monitoramento in zonas_configuradas:
+                    nome = self.remover_acentos(monitoramento.nome)
+                    self.desenhar_zona(frame, monitoramento.regiao, nome)
+
+                start_y = 30
+                for idx, (cls_name, count) in enumerate(class_count.items()):
+                    cv2.putText(frame, f"{cls_name}: {count}", (10, start_y + idx * 30),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, self.CORES.get('branco', (255, 255, 255)), 2)
+
+                self.last_results = detections
+                if last_results is not None:
+                    last_results['detections'] = detections
+                    last_results['class_count'] = dict(class_count)
+
+                self.pose_estimation(frame, camera_id)
+
+                sucesso, buffer = cv2.imencode('.jpg', frame)
+                if sucesso and frame_queue is not None:
+                    try:
+                        frame_queue.put(buffer.tobytes(), block=False)
+                    except Exception:
+                        pass
+        finally:
+            if self.cap is not None:
+                self.cap.release()
+            self.cap = None
 
 
     def get_last_results(self):
@@ -243,9 +307,9 @@ class VisaoService:
         """
             Realiza a detecção de objetos no frame e verifica se eles estão dentro das zonas configuradas, além de verificar se possuem o EPI obrigatório.
         """
+        self.ensure_models_loaded()
 
-        # Realiza a detecção de objetos no frame mascarado usando o modelo YOLO
-        results_object = modelo.track(frame, persist=True, conf=0.5, iou=0.4, verbose=False)
+        results_object = self.modelo.track(frame, persist=True, conf=0.5, iou=0.4, verbose=False)
 
         detections = []
         class_count = defaultdict(int)
@@ -263,7 +327,7 @@ class VisaoService:
 
                 # Obtém o ID do objeto rastreado (track_id) e o nome da classe (label_name)
                 track_id = int(box.id[0]) if box.id is not None else -1
-                label_name = modelo.names[cls].lower()
+                label_name = self.modelo.names[cls].lower()
 
                 zonas_do_objeto = [] # Lista para armazenar os IDs das zonas em que o objeto foi detectado
 
@@ -356,10 +420,13 @@ class VisaoService:
             quadril_esq: tuple[float, float] = kargs.get('quadril_esq')
             quadril_dir: tuple[float, float] = kargs.get('quadril_dir')
 
+            if ombro_esq is None or ombro_dir is None or quadril_esq is None or quadril_dir is None:
+                return is_ma_postura, motivo, (0, 0), (0, 0)
+
             # Calcula os pontos médios dos ombros e quadris
             pt_ombro: tuple[float, float] = ((ombro_esq[0] + ombro_dir[0]) / 2, (ombro_esq[1] + ombro_dir[1]) / 2)
             pt_quadril: tuple[float, float] = ((quadril_esq[0] + quadril_dir[0]) / 2, (quadril_esq[1] + quadril_dir[1]) / 2)
-            
+
             # Calcula o ângulo de inclinação do tronco usando a função atan2
             dx: float = pt_ombro[0] - pt_quadril[0]
             dy: float = pt_quadril[1] - pt_ombro[1]
@@ -400,16 +467,34 @@ class VisaoService:
             quadril_esq: tuple[float, float] = kargs.get('quadril_esq')
             quadril_dir: tuple[float, float] = kargs.get('quadril_dir')
 
-            # Verifica o ângulo de rotação entre os ombros e quadris, caso seja maior que 30 graus, considera má postura
-            dx_ombros: float = ombro_dir[0] - ombro_esq[0]
-            dy_ombros: float = ombro_dir[1] - ombro_esq[1]
-            angulo_ombros: float = math.degrees(math.atan2(abs(dy_ombros), abs(dx_ombros)))
+            if ombro_esq is None or ombro_dir is None or quadril_esq is None or quadril_dir is None:
+                return is_ma_postura, motivo, (0, 0), (0, 0)
 
-            if angulo_ombros > 30:
+            # Calcula a inclinação da linha dos ombros
+            dx_ombros = ombro_dir[0] - ombro_esq[0]
+            dy_ombros = ombro_dir[1] - ombro_esq[1]
+            angulo_ombros = math.degrees(math.atan2(dy_ombros, dx_ombros))
+
+            # Calcula a inclinação da linha dos quadris
+            dx_quadris = quadril_dir[0] - quadril_esq[0]
+            dy_quadris = quadril_dir[1] - quadril_esq[1]
+            angulo_quadris = math.degrees(math.atan2(dy_quadris, dx_quadris))
+
+            # A torção é a diferença absoluta entre os dois ângulos
+            diferenca_rotacao = abs(angulo_ombros - angulo_quadris)
+
+            # Normaliza para garantir que o ângulo seja o menor caminho (0 a 180)
+            if diferenca_rotacao > 180:
+                diferenca_rotacao = 360 - diferenca_rotacao
+
+            # Limite de torção (ajuste conforme necessário)
+            LIMITE_TORCAO = 30 # graus
+
+            if diferenca_rotacao > LIMITE_TORCAO:
                 is_ma_postura = True
-                motivo =  f"Rotação Excessiva do Tronco ({int(angulo_ombros)} graus)"
+                motivo = f"Rotação/Torção Excessiva ({int(diferenca_rotacao)} graus)"
 
-            return is_ma_postura, motivo, (int(ombro_esq[0]), int(ombro_esq[1])), (int(ombro_dir[0]), int(ombro_dir[1]))
+            return is_ma_postura, motivo, (int(ombro_esq[0]), int(ombro_esq[1])), (int(quadril_esq[0]), int(quadril_esq[1]))
 
         # ==============
         # Método de cálculo para indivíduo caído no chão
@@ -420,14 +505,36 @@ class VisaoService:
             quadril_esq: tuple[float, float] = kargs.get('quadril_esq')
             quadril_dir: tuple[float, float] = kargs.get('quadril_dir')
 
-            # Avalia se a pessoa está caída no chão, verificando a posição dos ombros e quadris em relação ao eixo vertical da imagem. Se a altura dos ombros e quadris estiver muito baixa (próxima do chão), considera-se que a pessoa está caída.
-            altura = min(ombro_esq[1], ombro_dir[1], quadril_esq[1], quadril_dir[1])
+            if ombro_esq is None or ombro_dir is None or quadril_esq is None or quadril_dir is None:
+                return is_ma_postura, motivo, (0, 0), (0, 0)
 
-            if altura > 400:  # Ajuste este valor de acordo com a altura da câmera e a posição do chão na imagem
+            # Calcula as extremidades (bounding box) dos pontos do tronco
+            min_x = min(ombro_esq[0], ombro_dir[0], quadril_esq[0], quadril_dir[0])
+            max_x = max(ombro_esq[0], ombro_dir[0], quadril_esq[0], quadril_dir[0])
+            min_y = min(ombro_esq[1], ombro_dir[1], quadril_esq[1], quadril_dir[1])
+            max_y = max(ombro_esq[1], ombro_dir[1], quadril_esq[1], quadril_dir[1])
+
+            largura = max_x - min_x
+            altura = max_y - min_y
+
+            # Evita divisão por zero
+            altura = max(altura, 1)
+
+            # Calcula a proporção geométrica da pessoa (Largura / Altura)
+            proporcao = largura / altura
+
+            # Se a largura for 20% maior que a altura do tronco, é muito provável que esteja no chão
+            LIMITE_QUEDA = 1.2 
+
+            if proporcao > LIMITE_QUEDA:
                 is_ma_postura = True
-                motivo = "Pessoa caída no chão"
+                motivo = f"Pessoa caída no chão (Prop: {proporcao:.2f})"
 
-            return is_ma_postura, motivo, (int(ombro_esq[0]), int(ombro_esq[1])), (int(quadril_dir[0]), int(quadril_dir[1]))
+            # Calcula o ponto central do corpo para exibir a mensagem corretamente
+            centro_x = int((min_x + max_x) / 2)
+            centro_y = int((min_y + max_y) / 2)
+
+            return is_ma_postura, motivo, (centro_x, centro_y), (centro_x, centro_y)
 
 
     def pose_estimation(self, frame, camera_id):
@@ -435,8 +542,8 @@ class VisaoService:
         Implementa a lógica de estimativa de pose, desenha o esqueleto e 
         calcula a inclinação do tronco para gerar alertas de má postura.
         """
-        # Mudança: Usar track para obter o ID da pessoa (necessário para o sistema de alertas não fazer spam)
-        results = modelo_pose.track(frame, persist=True, conf=0.5, verbose=False)
+        self.ensure_models_loaded()
+        results = self.modelo_pose.track(frame, persist=True, conf=0.5, verbose=False)
 
         esqueleto_conexoes = [
             (0, 1), (0, 2), (1, 3), (2, 4),            
@@ -476,45 +583,68 @@ class VisaoService:
                     ombro_esq, ombro_dir = individual[5], individual[6]
                     quadril_esq, quadril_dir = individual[11], individual[12]
 
-                    cor_coluna = self.CORES.get('ciano', (0, 255, 0))
+                    cor_coluna = self.CORES.get('ciano', (0, 255, 255))
+                    pontos_validos = True
 
+                    # 1. Primeiro apenas verifica se TODOS os pontos são válidos
                     for p in [ombro_esq, ombro_dir, quadril_esq, quadril_dir]:
                         if p[0] <= 0 or p[1] <= 0:
-                            cor_coluna = self.CORES.get('cinza', (120, 120, 120))
+                            pontos_validos = False
                             break
-                        else:
-                            is_ma_postura, motivo, pt_ombro, pt_quadril = self.avaliar_postura("tronco", ombro_esq, ombro_dir, quadril_esq, quadril_dir)
+
+                    # 2. Se houver algum ponto inválido (ex: fora da tela), não avalia a postura
+                    if not pontos_validos:
+                        cor_coluna = self.CORES.get('cinza', (120, 120, 120))
+                    
+                    # 3. Se todos os 4 pontos são válidos, avalia a postura uma ÚNICA vez
+                    else:
+                        # --- AVALIAÇÃO DO TRONCO ---
+                        is_ma_postura, motivo, pt_ombro, pt_quadril = self.avaliar_postura(
+                            "tronco", 
+                            ombro_esq=ombro_esq, ombro_dir=ombro_dir, 
+                            quadril_esq=quadril_esq, quadril_dir=quadril_dir
+                        )
+                        
+                        if is_ma_postura:
+                            cor_coluna = self.CORES.get('vermelho', (0, 0, 255))
+                            cv2.putText(frame, f"ALERTA: {motivo}", 
+                                        (pt_ombro[0] - 60, pt_ombro[1] - 20),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, cor_coluna, 2)
                             
-                            if is_ma_postura:
-                                cor_coluna = self.CORES.get('vermelho', (0, 0, 255))
-                                cv2.putText(frame, f"ALERTA: {motivo}", 
-                                            (pt_ombro[0] - 60, pt_ombro[1] - 20),
-                                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, cor_coluna, 2)
+                            if track_id != -1:
+                                self.registrar_alerta_postura(camera_id, track_id, motivo)
                                 
-                                if track_id != -1:
-                                    self.registrar_alerta_postura(track_id, motivo)
-    
-                            cv2.line(frame, pt_ombro, pt_quadril, cor_coluna, 4)
+                        cv2.line(frame, pt_ombro, pt_quadril, cor_coluna, 4)
 
-                            is_ma_postura_rotacao, motivo_rotacao, _, _ = self.avaliar_postura("rotacao", ombro_esq, ombro_dir, quadril_esq, quadril_dir)
+                        # --- AVALIAÇÃO DA ROTAÇÃO ---
+                        is_ma_postura_rotacao, motivo_rotacao, _, _ = self.avaliar_postura(
+                            "rotacao", 
+                            ombro_esq=ombro_esq, ombro_dir=ombro_dir, 
+                            quadril_esq=quadril_esq, quadril_dir=quadril_dir
+                        )
+                        
+                        if is_ma_postura_rotacao:
+                            cv2.putText(frame, f"ALERTA: {motivo_rotacao}", 
+                                        (pt_ombro[0] - 60, pt_ombro[1] - 40),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.CORES.get('vermelho', (0, 0, 255)), 2)
                             
-                            if is_ma_postura_rotacao:
-                                cv2.putText(frame, f"ALERTA: {motivo_rotacao}", 
-                                            (pt_ombro[0] - 60, pt_ombro[1] - 40),
-                                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.CORES.get('vermelho', (0, 0, 255)), 2)
-                                
-                                if track_id != -1:
-                                    self.registrar_alerta_postura(track_id, motivo_rotacao)
+                            if track_id != -1:
+                                self.registrar_alerta_postura(camera_id, track_id, motivo_rotacao)
 
-                            is_caido, motivo_queda, _, _ = self.avaliar_postura("queda", ombro_esq, ombro_dir, quadril_esq, quadril_dir)
+                        # --- AVALIAÇÃO DE QUEDA ---
+                        is_caido, motivo_queda, _, _ = self.avaliar_postura(
+                            "queda", 
+                            ombro_esq=ombro_esq, ombro_dir=ombro_dir, 
+                            quadril_esq=quadril_esq, quadril_dir=quadril_dir
+                        )
 
-                            if is_caido:
-                                cv2.putText(frame, f"ALERTA: {motivo_queda}", 
-                                            (pt_ombro[0] - 60, pt_ombro[1] - 60),
-                                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.CORES.get('vermelho', (0, 0, 255)), 2)
-                                
-                                if track_id != -1:
-                                    self.registrar_alerta_postura(camera_id, track_id, motivo_queda, severidade=3)
+                        if is_caido:
+                            cv2.putText(frame, f"ALERTA: {motivo_queda}", 
+                                        (pt_ombro[0] - 60, pt_ombro[1] - 60),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.CORES.get('vermelho', (0, 0, 255)), 2)
+                            
+                            if track_id != -1:
+                                self.registrar_alerta_postura(camera_id, track_id, motivo_queda, severidade=3)
 
     def registrar_alerta_postura(self, camera_id: int, track_id: int, motivo: str, severidade: int = 1) -> None:
         """
