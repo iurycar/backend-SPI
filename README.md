@@ -4,6 +4,7 @@
 
 * **app.py**:
 * **assets/**: Recursos para funcionamento do sistema
+* **assets/modelo/active_learning**: Armazena o dataset bruto e tratado do Active Learning
 * **connection/**: Pacote responsável por criar a conexão com PostgreSQL
 * **controller/**: Pacote responsável por estabelecer os ENDPOINTS da requisições HTTP
 * **core/**: Pacote responsável por realizar verificações de segurança
@@ -16,6 +17,13 @@
 Backend-SPI-2026/
 ├── assets/
 │    ├── modelo/
+│    │    ├── active_learnig/
+│    │    │    ├── dataset_captura
+│    │    │    │    ├── images
+│    │    │    │    └── labels
+│    │    │    └── dataset_tratado
+│    │    │         ├── images
+│    │    │         └── labels
 │    │    ├── treinamento/
 │    │    │    ├── weights/
 │    │    │    │    ├── best.pt
@@ -87,10 +95,11 @@ O servidor estará disponível em `http://127.0.0.1:5000` e pronto para receber 
 - `GET /video` - Acessa o vídeo da visão
 - `GET /video/<int:camera_id>` - Acessa o vídeo da câmera especificada
 - `GET /detections` - Retorna a lista de detecções
+- `POST /active-learning/toggle` - Ativa e desativa o método de Active Learning
 
 ### Zonas
-- `GET /zonas` - Lista todas as zonas ✅
-- `GET /zonas/<int:zona_id>` - Obtém a zona por ID ✅
+- `GET /zonas` - Lista todas as zonas
+- `GET /zonas/<int:zona_id>` - Obtém a zona por ID
 - `POST /zonas/registrar` - Registra uma nova zona 
 - `PUT /zonas/<int:zona_id>` - Atualiza uma zona por ID
 - `DELETE /zonas/<int:zona_id>` - Deleta uma zona por ID
