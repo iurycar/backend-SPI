@@ -311,6 +311,55 @@ class VisaoService:
         return self.last_results
 
 
+    def processar_active_learning(self, frame_limpo, boxes, img_shape):
+        """
+        Método para a regra de Active Learning e Amostragem de Incerteza.
+        """
+
+        # Verifica se a flag (bandeira) está ativa
+        flag_path = os.path.join(BASE_DIR, 'assets', 'modelo', 'active_learning', 'active_learning.flag')
+
+        if not os.path.exists(flag_path):
+            return
+
+        agora = time.monotonic()
+        img_altura, img_largura = img_shape
+        salvar_al = False
+        yolo_anotacoes = []
+
+        for box in boxes:
+            conf = float(box.conf[0])
+            cls = int(box.cls[0])
+            
+            # Condição de incerteza (30% a 70%)
+            if 0.3 <= conf <= 0.7:
+                cache_chave = "al_uncertainty"
+                ultimo_salvo = self._al_cooldown.get(cache_chave, 0)
+
+                if agora - ultimo_salvo > 5:
+                    salvar_al = True
+                    self._al_cooldown[cache_chave] = agora
+
+            xyxy = box.xyxy[0].cpu().numpy().astype(int)
+
+            x1, y1, x2, y2 = xyxy
+
+            x_centro = ((x1+x2)/2) / img_largura
+            y_centro = ((y1+y2)/2) / img_altura
+            largura = (x2-x1) / img_largura
+            altura = (y2-y1) / img_altura
+
+            yolo_anotacoes.append(f"{cls} {x_centro:.6f} {y_centro:.6f} {largura:.6f} {altura:.6f}")  
+
+        if salvar_al and len(yolo_anotacoes) > 0:
+            timestamp = int(time.time() * 1000)
+            img_filename = os.path.join(self.al_img_dir, f"frame_al_{timestamp}.jpg")
+            lbl_filename = os.path.join(self.al_lbl_dir, f"frame_al_{timestamp}.txt")
+            
+            # Chama a thread assíncrona
+            self._salvar_active_learning_async(frame_limpo, yolo_anotacoes, img_filename, lbl_filename)
+        
+
     def object_detection(self, frame, zonas_configuradas):
         """
             Realiza a detecção de objetos no frame e verifica se eles estão dentro das zonas configuradas, além de verificar se possuem o EPI obrigatório.
@@ -323,9 +372,6 @@ class VisaoService:
         class_count = defaultdict(int)
 
         frame_limpo = frame.copy()
-        salvar_al = False
-        yolo_anotacoes = []
-        agora = time.monotonic()
 
         # Itera sobre os resultados da detecção
         for r in results_object:
@@ -333,6 +379,8 @@ class VisaoService:
                 continue
 
             img_altura, img_largura = frame.shape[:2]
+
+            self.processar_active_learning(frame_limpo, r.boxes, (img_altura, img_largura))
 
             # Itera sobre cada caixa detectada
             for box in r.boxes:
@@ -343,26 +391,6 @@ class VisaoService:
                 # Obtém o ID do objeto rastreado (track_id) e o nome da classe (label_name)
                 track_id = int(box.id[0]) if box.id is not None else -1
                 label_name = self.modelo.names[cls].lower()
-
-                # Lógica do Active Learning
-                if 0.3 <= conf <= 0.7:
-                    if 'camera_id' not in locals():
-                        camera_id = None
-
-                    cache_chave = f"al_uncertainty_{camera_id}" if 'camera_id' in locals() else "al_uncertainty"
-                    ultimo_salvo = self._al_cooldown.get(cache_chave, 0)
-
-                    if agora - ultimo_salvo > 5:
-                        salvar_al = True
-                        self._al_cooldown[cache_chave] = agora
-
-                x1, y1, x2, y2 = xyxy
-                x_centro = ((x1+x2)/2) / img_largura
-                y_centro = ((y1+y2)/2) / img_altura
-                largura = (x2-x1) / img_largura
-                altura = (y2-y1) / img_altura
-
-                yolo_anotacoes.append(f"{cls} {x_centro:.6f} {y_centro:.6f} {largura:.6f} {altura:.6f}")  
 
                 zonas_do_objeto = [] # Lista para armazenar os IDs das zonas em que o objeto foi detectado
 
@@ -406,14 +434,6 @@ class VisaoService:
                         "confidence": conf,
                         "zona": z_id
                     })
-
-        if salvar_al:
-            timestamp = int(time.time() * 1000)
-            img_filename = os.path.join(self.al_img_dir, f"frame_al_{timestamp}.jpg")
-            lbl_filename = os.path.join(self.al_lbl_dir, f"frame_al_{timestamp}.txt")
-
-            self._salvar_active_learning_async(frame_limpo, yolo_anotacoes, img_filename, lbl_filename)
-            
 
         return detections, class_count
 
