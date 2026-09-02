@@ -1,0 +1,2 @@
+Dentro dessa pasta será gerada novas pastas images e labels, que armazenarão
+imagens e rótulos para um novo treinamento.

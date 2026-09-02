@@ -2,6 +2,7 @@ from collections import defaultdict
 from ultralytics import YOLO
 import numpy as np
 import unicodedata
+import threading
 import platform
 import math
 import time
@@ -53,6 +54,13 @@ class VisaoService:
         self._alert_cache = {}
         self.modelo = None
         self.modelo_pose = None
+
+        self.active_learning_dir = os.path.join(BASE_DIR, 'assets', 'modelo', 'active_learning')
+        self.al_img_dir = os.path.join(self.active_learning_dir, 'images')
+        self.al_lbl_dir = os.path.join(self.active_learning_dir, 'labels')
+        os.makedirs(self.al_img_dir, exist_ok=True)
+        os.makedirs(self.al_lbl_dir, exist_ok=True)
+        self._al_cooldown = {}
 
     def ensure_models_loaded(self):
         if self.modelo is None:
@@ -314,10 +322,17 @@ class VisaoService:
         detections = []
         class_count = defaultdict(int)
 
+        frame_limpo = frame.copy()
+        salvar_al = False
+        yolo_anotacoes = []
+        agora = time.monotonic()
+
         # Itera sobre os resultados da detecção
         for r in results_object:
             if r.boxes is None:
                 continue
+
+            img_altura, img_largura = frame.shape[:2]
 
             # Itera sobre cada caixa detectada
             for box in r.boxes:
@@ -328,6 +343,26 @@ class VisaoService:
                 # Obtém o ID do objeto rastreado (track_id) e o nome da classe (label_name)
                 track_id = int(box.id[0]) if box.id is not None else -1
                 label_name = self.modelo.names[cls].lower()
+
+                # Lógica do Active Learning
+                if 0.3 <= conf <= 0.7:
+                    if 'camera_id' not in locals():
+                        camera_id = None
+
+                    cache_chave = f"al_uncertainty_{camera_id}" if 'camera_id' in locals() else "al_uncertainty"
+                    ultimo_salvo = self._al_cooldown.get(cache_chave, 0)
+
+                    if agora - ultimo_salvo > 5:
+                        salvar_al = True
+                        self._al_cooldown[cache_chave] = agora
+
+                x1, y1, x2, y2 = xyxy
+                x_centro = ((x1+x2)/2) / img_largura
+                y_centro = ((y1+y2)/2) / img_altura
+                largura = (x2-x1) / img_largura
+                altura = (y2-y1) / img_altura
+
+                yolo_anotacoes.append(f"{cls} {x_centro:.6f} {y_centro:.6f} {largura:.6f} {altura:.6f}")  
 
                 zonas_do_objeto = [] # Lista para armazenar os IDs das zonas em que o objeto foi detectado
 
@@ -372,8 +407,31 @@ class VisaoService:
                         "zona": z_id
                     })
 
+        if salvar_al:
+            timestamp = int(time.time() * 1000)
+            img_filename = os.path.join(self.al_img_dir, f"frame_al_{timestamp}.jpg")
+            lbl_filename = os.path.join(self.al_lbl_dir, f"frame_al_{timestamp}.txt")
+
+            self._salvar_active_learning_async(frame_limpo, yolo_anotacoes, img_filename, lbl_filename)
+            
+
         return detections, class_count
 
+    def _salvar_active_learning_async(self, frame_limpo, yolo_anotacoes, img_filename, lbl_filename):
+        """
+        Salva as imagens e labels em uma thread separada para não travar o loop principal.
+        """
+
+        def salvar():
+            try:
+                cv2.imwrite(img_filename, frame_limpo)
+                with open(lbl_filename, 'w') as f:
+                    f.write("\n".join(yolo_anotacoes))
+                print(f"📸 Frame salvo para Active Learning: {img_filename}")
+            except Exception as e:
+                print(f"❌ Erro ao salvar frame para Active Learning: {e}")
+
+        threading.Thread(target=salvar, daemon=True).start()
 
     def registrar_alerta_epi_incorreto(self, monitoramento: Zona, evento: str, track_id: int, severidade: int = 1) -> None:
         """
