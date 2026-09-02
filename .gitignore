@@ -18,3 +18,4 @@ assets/modelo/treinamento/weights/yolov8m.pt
 assets/modelo/treinamento/weights/yolov8m-pose.pt
 assets/modelo/treinamento/weights/yolov8s-pose.pt
 numerador.py
+__pycache__
