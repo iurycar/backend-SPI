@@ -62,8 +62,8 @@ def create_visao_bp(connection):
             msg = "Active Learning ativado com sucesso."
         else:
             # Apaga o arquivo para desativar
-            if os.path.exists(flag_path):
-                os.remove(flag_path)
+            with open(flag_path, 'w') as f:
+                f.write('0')
             msg = "Active Learning desativado com sucesso."
                 
         return jsonify({"message": msg, "enabled": enabled}), 200

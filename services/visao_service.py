@@ -55,9 +55,11 @@ class VisaoService:
         self.modelo = None
         self.modelo_pose = None
 
-        self.active_learning_dir = os.path.join(BASE_DIR, 'assets', 'modelo', 'active_learning')
+        self.active_learning_dir = os.path.join(BASE_DIR, 'assets', 'modelo', 'active_learning', 'dataset_captura')
         self.al_img_dir = os.path.join(self.active_learning_dir, 'images')
         self.al_lbl_dir = os.path.join(self.active_learning_dir, 'labels')
+        self.flag_path = os.path.join(self.active_learning_dir, 'active_learning.flag')
+        
         os.makedirs(self.al_img_dir, exist_ok=True)
         os.makedirs(self.al_lbl_dir, exist_ok=True)
         self._al_cooldown = {}
@@ -315,48 +317,63 @@ class VisaoService:
         """
         Método para a regra de Active Learning e Amostragem de Incerteza.
         """
+        
+        if not os.path.exists(self.flag_path):
+            return
 
-        # Verifica se a flag (bandeira) está ativa
-        flag_path = os.path.join(BASE_DIR, 'assets', 'modelo', 'active_learning', 'active_learning.flag')
+        with open(self.flag_path, 'r') as f:
+            flag_value = f.read().strip()
 
-        if not os.path.exists(flag_path):
+        if flag_value != '1':
             return
 
         agora = time.monotonic()
         img_altura, img_largura = img_shape
-        salvar_al = False
+        
+        # Verifica primeiro se existe algum objeto duvidoso na cena (confiança entre 0.3 e 0.7)
+        tem_objeto_incerto = False
+
+        for box in boxes:
+            conf = float(box.conf[0])
+
+            if 0.3 <= conf <= 0.7:
+                tem_objeto_incerto = True
+                break
+
+        if not tem_objeto_incerto:
+            return  # Nenhuma incerteza na cena: descarta o processamento
+
+        # Avalia o cooldown de disparo
+        cache_chave = "al_uncertainty"
+        ultimo_salvo = self._al_cooldown.get(cache_chave, 0)
+
+        # Verifica se o cooldown ainda está ativo (5 segundos)
+        if agora - ultimo_salvo <= 5:
+            return  
+        
+        # Coleta os rótulos do frame
         yolo_anotacoes = []
 
         for box in boxes:
             conf = float(box.conf[0])
             cls = int(box.cls[0])
-            
-            # Condição de incerteza (30% a 70%)
-            if 0.3 <= conf <= 0.7:
-                cache_chave = "al_uncertainty"
-                ultimo_salvo = self._al_cooldown.get(cache_chave, 0)
-
-                if agora - ultimo_salvo > 5:
-                    salvar_al = True
-                    self._al_cooldown[cache_chave] = agora
-
             xyxy = box.xyxy[0].cpu().numpy().astype(int)
 
             x1, y1, x2, y2 = xyxy
+            x_centro = ((x1 + x2) / 2) / img_largura
+            y_centro = ((y1 + y2) / 2) / img_altura
+            largura = (x2 - x1) / img_largura
+            altura = (y2 - y1) / img_altura
 
-            x_centro = ((x1+x2)/2) / img_largura
-            y_centro = ((y1+y2)/2) / img_altura
-            largura = (x2-x1) / img_largura
-            altura = (y2-y1) / img_altura
+            yolo_anotacoes.append(f"{cls} {x_centro:.6f} {y_centro:.6f} {largura:.6f} {altura:.6f} : {conf:.2f}")
 
-            yolo_anotacoes.append(f"{cls} {x_centro:.6f} {y_centro:.6f} {largura:.6f} {altura:.6f}")  
-
-        if salvar_al and len(yolo_anotacoes) > 0:
+        # Dispara o salvamento e atualiza o cooldown
+        if len(yolo_anotacoes) > 0:
+            self._al_cooldown[cache_chave] = agora
             timestamp = int(time.time() * 1000)
             img_filename = os.path.join(self.al_img_dir, f"frame_al_{timestamp}.jpg")
             lbl_filename = os.path.join(self.al_lbl_dir, f"frame_al_{timestamp}.txt")
             
-            # Chama a thread assíncrona
             self._salvar_active_learning_async(frame_limpo, yolo_anotacoes, img_filename, lbl_filename)
         
 
