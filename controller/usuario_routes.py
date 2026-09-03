@@ -17,6 +17,7 @@ def create_user_bp(connection):
             user = usuario_service.login(login_dto.email, login_dto.password)
 
             if user:
+                session.permanent = True # Define a sessão como permanente para respeitar o tempo de expiração configurado
                 session['user_id'] = user.id
                 session['user_email'] = user.email
                 session['user_perfil'] = user.perfil
@@ -26,22 +27,61 @@ def create_user_bp(connection):
                 session['user_telefone'] = user.telefone
                 session['user_admin'] = user.admin
                 session['user_ativo'] = user.ativo
-                session['user_acesso'] = user.acesso
-                
-                return jsonify({'message': 'Login successful'}), 200
+                session['user_acesso'] = str(user.acesso) if user.acesso else None
+
+                # Retorna dados do usuário para o frontend armazenar localmente
+                return jsonify({
+                    'message': 'Login successful',
+                    'user': {
+                        'id': user.id,
+                        'nome': user.nome,
+                        'sobrenome': user.sobrenome,
+                        'email': user.email,
+                        'perfil': user.perfil,
+                        'unidade': user.unidade,
+                        'telefone': user.telefone,
+                        'admin': user.admin,
+                        'ativo': user.ativo
+                    }
+                }), 200
             else:
                 return jsonify({'message': 'Invalid email or password'}), 401
             
         except ValidationError as e:
             return jsonify({'message': str(e)}), 400
         except Exception as e:
+            print(f"Erro no login: {e}")
             return jsonify({'message': 'Erro interno do servidor'}), 500
 
     @user_bp.route('/logout', methods=['POST'])
     def logout():
-        session.pop('user_id', None)
+        session.clear()
         return jsonify({'message': 'Logout successful'}), 200
 
+    @user_bp.route('/session', methods=['GET'])
+    def get_session():
+        """
+        Retorna os dados do usuário da sessão atual.
+        Usado pelo frontend para validar se a sessão ainda está ativa
+        e para recuperar o perfil do usuário após recarregamento da página.
+        """
+        if 'user_id' not in session:
+            return jsonify({'message': 'Não autenticado'}), 401
+
+        return jsonify({
+            'authenticated': True,
+            'user': {
+                'id': session.get('user_id'),
+                'nome': session.get('user_nome'),
+                'sobrenome': session.get('user_sobrenome'),
+                'email': session.get('user_email'),
+                'perfil': session.get('user_perfil'),
+                'unidade': session.get('user_unidade'),
+                'telefone': session.get('user_telefone'),
+                'admin': session.get('user_admin'),
+                'ativo': session.get('user_ativo')
+            }
+        }), 200
 
     @user_bp.route('/signup', methods=['POST'])
     def signup():
@@ -57,9 +97,7 @@ def create_user_bp(connection):
                 signup_dto.perfil, 
                 signup_dto.unidade, 
                 signup_dto.telefone, 
-                False
             )
-
 
             if user:
                 return jsonify({'message': 'Signup successful'}), 201
@@ -69,6 +107,7 @@ def create_user_bp(connection):
         except ValidationError as e:
             return jsonify({'message': str(e)}), 400
         except Exception as e:
+            print(f"Erro no signup: {e}")
             return jsonify({'message': 'Erro interno do servidor'}), 500
 
     return user_bp

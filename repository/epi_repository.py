@@ -50,7 +50,7 @@ class EpiRepository:
             else:
                 return None
 
-    def registrar_epi(self, nome: str, categoria: str, certificado: str, validade: str, estoque: int, quantidade_min: int, em_uso: int, id_epi: int | None) -> Epi | None:
+    def registrar_epi(self, nome: str, categoria: str, certificado: str, validade: str, estoque: int, quantidade_min: int, em_uso: int) -> Epi | None:
         with self.conn.cursor() as cursor:
             try:
                 cursor.execute(

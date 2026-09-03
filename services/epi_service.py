@@ -18,7 +18,8 @@ class EpiService:
                 'id': epi.id,
                 'nome': epi.nome,
                 'categoria': epi.categoria,
-                'validade': epi.validade,
+                'certificado': epi.certificado,
+                'validade': str(epi.validade) if epi.validade else None,
                 'estoque': epi.estoque,
                 'quantidade_min': epi.quantidade_min,
                 'em_uso': epi.em_uso
@@ -36,7 +37,8 @@ class EpiService:
                 'id': epi.id,
                 'nome': epi.nome,
                 'categoria': epi.categoria,
-                'validade': epi.validade,
+                'certificado': epi.certificado,
+                'validade': str(epi.validade) if epi.validade else None,
                 'estoque': epi.estoque,
                 'quantidade_min': epi.quantidade_min,
                 'em_uso': epi.em_uso
@@ -58,8 +60,7 @@ class EpiService:
             epi_dto.validade,
             epi_dto.estoque,
             epi_dto.quantidade_min,
-            epi_dto.em_uso,
-            epi_dto.id_epi
+            epi_dto.em_uso
         )
 
         if epi:
@@ -67,11 +68,11 @@ class EpiService:
                 'id': epi.id,
                 'nome': epi.nome,
                 'categoria': epi.categoria,
-                'validade': epi.validade,
+                'certificado': epi.certificado,
+                'validade': str(epi.validade) if epi.validade else None,
                 'estoque': epi.estoque,
                 'quantidade_min': epi.quantidade_min,
-                'em_uso': epi.em_uso,
-                "id_epi": epi.id_epi
+                'em_uso': epi.em_uso
             }
 
         return None
@@ -100,7 +101,7 @@ class EpiService:
                 'nome': epi.nome,
                 'categoria': epi.categoria,
                 'certificado': epi.certificado,
-                'validade': epi.validade,
+                'validade': str(epi.validade) if epi.validade else None,
                 'estoque': epi.estoque,
                 'quantidade_min': epi.quantidade_min,
                 'em_uso': epi.em_uso

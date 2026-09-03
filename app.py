@@ -31,14 +31,18 @@ print(f"DEV_INSECURE: {DEV_INSECURE}")
 if DEV_INSECURE:
     app.config['SESSION_COOKIE_HTTPONLY'] = False  # Permite que o cookie seja acessado pelo JavaScript
     app.config['SESSION_COOKIE_SECURE'] = False  # Permite que o cookie seja enviado em conexões HTTP
-    app.config['SESSION_COOKIE_SAMESITE'] = None  # Permite que o cookie seja enviado em solicitações de terceiros
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 else:
     app.config['SESSION_COOKIE_HTTPONLY'] = True # Impede que o cookie seja acessado pelo JavaScript
     app.config['SESSION_COOKIE_SECURE'] = True # Garante que o cookie seja enviado apenas em conexões HTTPS
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' # Impede que o cookie seja enviado em solicitações de terceiros, mas permite em links normais
 
-# Habilita CORS para permitir solicitações de diferentes origens, incluindo credenciais (cookies)
-CORS(app, supports_credentials=True)
+# Em desenvolvimento, aceita origens locais com credenciais. Em produção,
+# configure explicitamente as origens permitidas no ambiente de implantação.
+if DEV_INSECURE:
+    CORS(app, supports_credentials=True, origins="*")
+else:
+    CORS(app, supports_credentials=True)
 
 # Cria a classe conexão, para ser passada para os blueprints
 conn = Connection()
