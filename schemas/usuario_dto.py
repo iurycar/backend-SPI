@@ -33,14 +33,14 @@ class LoginDTO:
 
         return cls(email=email, password=password)
 
-"""
+
 @dataclass
 class SignupDTO:
     email: str
     password: str
     nome: str
-    sobrenome: str | None = None
     perfil: str
+    sobrenome: str | None = None
     unidade: str | None = None
     telefone: str | None = None
 
@@ -78,4 +78,3 @@ class SignupDTO:
             unidade=unidade,
             telefone=telefone
         )
-"""

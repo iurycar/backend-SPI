@@ -1,4 +1,4 @@
-from load_dotenv import load_dotenv
+from dotenv import load_dotenv
 import psycopg2
 import os
 

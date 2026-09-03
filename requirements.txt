@@ -1,6 +1,7 @@
 flask
 flask-cors
 bcrypt
+numpy
 python-dotenv
 psycopg2-binary
 opencv-python==4.10.0.84
