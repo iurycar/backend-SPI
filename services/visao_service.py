@@ -493,7 +493,7 @@ class VisaoService:
                 return
 
             for responsavel in responsaveis:
-                if self.alertas_service.criar_alerta(monitoramento.id_monitorar, responsavel, evento):
+                if self.alertas_service.criar_alerta(monitoramento, responsavel, evento):
                     self._alert_cache[cache_chave] = agora
 
 
