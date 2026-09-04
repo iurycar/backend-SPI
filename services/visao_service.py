@@ -482,11 +482,11 @@ class VisaoService:
         if monitoramento.id_monitorar is None:
             return
 
-        # Chave única de lock (cadeado) de cooldown (tempo de recarga) de 10 segundos para evitar alertas duplicados
+        # Chave única de lock (cadeado) de cooldown (tempo de recarga) de 30 segundos para evitar alertas duplicados
         cache_chave = f"lock:alerta:epi:{monitoramento.id_monitorar}:{evento}:{track_id}"
 
         # Se a chave já existir, significa que um alerta recente já foi registrado para este evento e track_id
-        if not self.redis_client.set(cache_chave, "1", ex=10, nx=True):
+        if not self.redis_client.set(cache_chave, "1", ex=30, nx=True):
             return # Já existe um alerta recente para este evento e track_id
 
         setor = self.setores_repository.get_setor_por_id_zona(monitoramento.id)
@@ -749,8 +749,8 @@ class VisaoService:
 
         cache_chave = f"lock:alerta:postura:{camera_id}:{track_id}:{motivo}"
 
-        # Evita alertas duplicados para o mesmo track_id e motivo dentro de um período de 10 segundos
-        if not self.redis_client.set(cache_chave, "1", ex=10, nx=True):
+        # Evita alertas duplicados para o mesmo track_id e motivo dentro de um período de 30 segundos
+        if not self.redis_client.set(cache_chave, "1", ex=30, nx=True):
             return
         
         setor = self.setores_repository.get_setor_por_id_camera(camera_id)
