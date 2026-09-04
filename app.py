@@ -5,10 +5,10 @@ from flask import Flask
 import atexit
 import os
 
-from worker.vision_manager import iniciar_vision_workers, parar_vision_workers
-
-from extensions import socketio
+from extensions import socketio, REDIS_URL
 from events.alertas_events import register_socket_events
+from worker.vision_manager import iniciar_vision_workers, parar_vision_workers
+from connection.conn import Connection
 
 from controller.cameras_routes import create_cameras_bp
 from controller.setores_routes import create_setores_bp
@@ -18,8 +18,6 @@ from controller.visao_routes import create_visao_bp
 from controller.zonas_routes import create_zonas_bp
 from controller.epi_routes import create_epi_bp
 
-from connection.conn import Connection
-
 load_dotenv()  # Carrega as variáveis de ambiente do arquivo .env
 
 app = Flask(__name__)
@@ -28,7 +26,7 @@ app.secret_key = os.getenv('SECRET_KEY')
 socketio.init_app(app, cors_allowed_origins="*")  # Inicializa o SocketIO com o aplicativo Flask
 register_socket_events(socketio)  # Registra os eventos do WebSocket
 
-DEV_INSECURE = os.getenv('DEV_INSECURE', 'false').lower() == 'true'
+DEV_INSECURE = os.getenv('DEV_INSECURE', 'false', message_queue=REDIS_URL).lower() == 'true'
 
 # Configurações de segurança para a sessão
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)

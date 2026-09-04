@@ -18,6 +18,7 @@ API do Sistema de Proteção Individual (SPI), responsável por autenticação, 
 
 - Python 3.10 ou superior.
 - PostgreSQL com o schema de `assets/tabelas_spi-postgres.sql`.
+- Redis.
 - Dependências de `requirements.txt`.
 
 ## Configuração local

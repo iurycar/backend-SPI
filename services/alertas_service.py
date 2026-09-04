@@ -3,6 +3,8 @@ from services.usuario_service import UsuarioService
 from services.cameras_service import CamerasService
 from services.setores_service import SetoresService
 
+from extensions import emitir_evento_global
+
 from models.cameras import Camera
 from models.setores import Setor
 from models.zonas import Zona
@@ -133,8 +135,8 @@ class AlertasService:
             'evento': evento,
             'severidade': severidade
         }
-
-        socketio.emit('novo_alerta', payload_notificao, broadcast=True)
+        
+        emitir_evento_global('novo_alerta', payload_notificao)
 
         if severidade == 3 and id_usuario:
             self._enviar_email_alerta_critico(id_usuario, monitoramento.nome, camera.nome, setor.nome, evento, severidade)
