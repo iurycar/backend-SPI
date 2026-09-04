@@ -1,7 +1,12 @@
 from services.alertas_service import AlertasService
 from flask import Blueprint, jsonify, request
+from flask_socketio import SocketIO, emit
 
-def create_alertas_bp(connection):
+"""
+    Arquivo responsável por definir as rotas relacionadas aos alertas (HTTP e WebSocket) e criar o blueprint correspondente.
+"""
+
+def create_alertas_bp(connection, socketio: SocketIO) -> Blueprint:
     alertas_bp = Blueprint('alertas', __name__)
     alertas_service = AlertasService(connection)
 
@@ -52,5 +57,30 @@ def create_alertas_bp(connection):
             return jsonify({'message': 'Alerta deletado com sucesso'}), 200
         else:
             return jsonify({'message': 'Falha ao deletar alerta'}), 400
+
+
+    """
+    WebSocket Events
+    """
+
+    @socketio.on('connect')
+    def lidar_com_conexao():
+        print('Cliente conectado')
+
+        emit('connected', {'message': 'Conectado ao servidor de notificações'})
+
+
+    @socketio.on('disconnect')
+    def lidar_com_desconexao():
+        print('Cliente desconectado')
+
+        emit('disconnected', {'message': 'Desconectado do servidor de notificações'})
+
+    @socketio.on('new_alerta')
+    def enviar_novo_alerta_para_clientes():
+
+        #TODO: Implementar a lógica para enviar novos alertas para os clientes conectados via WebSocket.
+
+        pass
 
     return alertas_bp

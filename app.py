@@ -1,3 +1,4 @@
+from flask_socketio import SocketIO
 from dotenv import load_dotenv
 from datetime import timedelta
 from flask_cors import CORS
@@ -19,6 +20,7 @@ load_dotenv()  # Carrega as variáveis de ambiente do arquivo .env
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY')
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 DEV_INSECURE = os.getenv('DEV_INSECURE', 'false').lower() == 'true'
 
@@ -35,7 +37,7 @@ if DEV_INSECURE:
 else:
     app.config['SESSION_COOKIE_HTTPONLY'] = True # Impede que o cookie seja acessado pelo JavaScript
     app.config['SESSION_COOKIE_SECURE'] = True # Garante que o cookie seja enviado apenas em conexões HTTPS
-    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' # Impede que o cookie seja enviado em solicitações de terceiros, mas permite em links normais
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 # Em desenvolvimento, aceita origens locais com credenciais. Em produção,
 # configure explicitamente as origens permitidas no ambiente de implantação.
@@ -49,7 +51,7 @@ conn = Connection()
 
 app.register_blueprint(create_cameras_bp(conn.get_connection()))
 app.register_blueprint(create_setores_bp(conn.get_connection()))
-app.register_blueprint(create_alertas_bp(conn.get_connection()))
+app.register_blueprint(create_alertas_bp(conn.get_connection(), socketio))
 app.register_blueprint(create_zonas_bp(conn.get_connection()))
 app.register_blueprint(create_visao_bp(conn.get_connection()))
 app.register_blueprint(create_user_bp(conn.get_connection()))
@@ -57,4 +59,4 @@ app.register_blueprint(create_epi_bp(conn.get_connection()))
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    socketio.run(host='0.0.0.0', port=5000, debug=True)
