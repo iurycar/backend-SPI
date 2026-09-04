@@ -1,8 +1,10 @@
+from flask_session import Session
 from dotenv import load_dotenv
 from datetime import timedelta
 from flask_cors import CORS
 from flask import Flask
 import atexit
+import redis
 import os
 
 from extensions import socketio, REDIS_URL
@@ -22,6 +24,15 @@ load_dotenv()  # Carrega as variáveis de ambiente do arquivo .env
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY')
+
+# Configuração da Sessão no Redis
+app.config['SESSION_TYPE'] = 'redis' # Configura o tipo de sessão para usar Redis
+app.config['SESSION_PERMANENT'] = True # Define a sessão como permanente
+app.config['SESSION_SESSION_LIFETIME'] = timedelta(hours=8)
+app.config['SESSION_USE_SIGNER'] = True # Habilita a assinatura do cookie de sessão para maior segurança
+app.config['SESSION_REDIS'] = redis.Redis.from_url(REDIS_URL) # Define a URL do Redis para armazen
+
+Session(app)  # Inicializa a sessão do Flask
 
 socketio.init_app(app, cors_allowed_origins="*")  # Inicializa o SocketIO com o aplicativo Flask
 register_socket_events(socketio)  # Registra os eventos do WebSocket
