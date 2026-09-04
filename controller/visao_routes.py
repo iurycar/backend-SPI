@@ -9,7 +9,6 @@ visao_bp = Blueprint('visao', __name__)
 
 def create_visao_bp(connection):
     visao_service = VisaoService(connection)
-    workers = {}
 
     @visao_bp.route('/video', defaults={'camera_id': 1}, methods=['GET'])
     @visao_bp.route('/video/', defaults={'camera_id': 1}, methods=['GET'])

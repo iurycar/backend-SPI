@@ -1,6 +1,7 @@
 from repository.zonas_repository import ZonasRepository
 from schemas.zona_dto import ZonaDTO
-from flask import session
+from extensions import redis_client
+import json
 
 class ZonasService:
     def __init__(self, connection):
@@ -48,8 +49,20 @@ class ZonasService:
         return None
 
     def listar_zonas_por_id_camera(self, camera_id: int) -> list[dict]:
-        zonas = self.zonas_repository.get_zonas_por_id_camera(camera_id)
+        cache_chave = f"cache:zonas:camera:{camera_id}"
 
+        # Busca os dados em cache no Redis
+        dados_em_cache = redis_client.get(cache_chave)
+        if dados_em_cache:
+            try:
+                zonas_lista = json.loads(dados_em_cache)
+                return zonas_lista
+
+            except json.JSONDecodeError:
+                print("Erro ao decodificar os dados em cache. Obtendo do banco de dados.")
+
+        # Caso não haja dados em cache ou ocorra um erro, busca do banco de dados
+        zonas = self.zonas_repository.get_zonas_por_id_camera(camera_id)
         zonas_lista: list[dict] = []
 
         if zonas:
@@ -65,6 +78,9 @@ class ZonasService:
                     'id_camera': zona.id_camera
                 }
                 zonas_lista.append(zona_dict)
+
+        # Salva os dados no cache Redis com um tempo de expiração de 1 hora (3600 segundos)
+        redis_client.set(cache_chave, json.dumps(zonas_lista), ex=3600)
 
         return zonas_lista
 
@@ -86,6 +102,8 @@ class ZonasService:
         )
 
         if zona:
+            redis_client.delete(f"cache:zonas:camera:{zona.id_camera}")  # Invalida o cache para a câmera afetada
+
             return {
                 'id': zona.id,
                 'nome': zona.nome,
@@ -120,6 +138,7 @@ class ZonasService:
         )
 
         if zona:
+            redis_client.delete(f"cache:zonas:camera:{zona.id_camera}")  # Invalida o cache para a câmera afetada
             return {
                 'id': zona.id,
                 'nome': zona.nome,
@@ -135,4 +154,9 @@ class ZonasService:
 
     def deletar_zona(self, zona_id: int) -> bool:
         sucesso = self.zonas_repository.deletar_zona(zona_id)
+        if sucesso:
+            # Encontra a zona deletada para invalidar o cache
+            zona = self.zonas_repository.obter_zona_por_id(zona_id)
+            if zona:
+                redis_client.delete(f"cache:zonas:camera:{zona.id_camera}")  # Invalida o cache para a câmera afetada
         return sucesso
