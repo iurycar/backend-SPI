@@ -64,5 +64,9 @@ app.register_blueprint(create_epi_bp(conn.get_connection()))
 
 if __name__ == '__main__':
     atexit.register(parar_vision_workers)  # Registra a função para parar os workers ao encerrar o servidor
-    iniciar_vision_workers([0])
+
+    # Evita que o reloader do Flask (debug=True) inicie os workers 2 vezes no OpenCV
+    if os.environ.get('WERKZEUG_RUN_MAIN') == 'true' or not app.debug:
+        iniciar_vision_workers([1])
+
     socketio.run(host='0.0.0.0', port=5000, debug=True)

@@ -1,9 +1,11 @@
 from collections import defaultdict
+from extensions import REDIS_URL
 from ultralytics import YOLO
 import numpy as np
 import unicodedata
 import threading
 import platform
+import redis
 import math
 import time
 import cv2
@@ -49,6 +51,9 @@ class VisaoService:
         self.monitoramento_repository = MonitoramentoRepository(connection)
         self.setores_repository = SetoresRepository(connection)
         self.alertas_service = AlertasService(connection)
+
+        self.redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+
         self.last_results = []
         self.cap = None
         self._alert_cache = {}
@@ -474,6 +479,7 @@ class VisaoService:
         """
         Registra um alerta, evitando duplicidade por um curto período.
         """
+        
         if monitoramento.id_monitorar is None:
             return
 
