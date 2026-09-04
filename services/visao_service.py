@@ -1,9 +1,11 @@
 from collections import defaultdict
+from extensions import REDIS_URL
 from ultralytics import YOLO
 import numpy as np
 import unicodedata
 import threading
 import platform
+import redis
 import math
 import time
 import cv2
@@ -49,9 +51,11 @@ class VisaoService:
         self.monitoramento_repository = MonitoramentoRepository(connection)
         self.setores_repository = SetoresRepository(connection)
         self.alertas_service = AlertasService(connection)
+
+        self.redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+
         self.last_results = []
         self.cap = None
-        self._alert_cache = {}
         self.modelo = None
         self.modelo_pose = None
 
@@ -474,28 +478,25 @@ class VisaoService:
         """
         Registra um alerta, evitando duplicidade por um curto período.
         """
+
         if monitoramento.id_monitorar is None:
             return
 
-        cache_chave = (monitoramento.id_monitorar, evento, track_id)
-        agora = time.monotonic()
-        ultimo_alerta = self._alert_cache.get(cache_chave, 0)
+        # Chave única de lock (cadeado) de cooldown (tempo de recarga) de 30 segundos para evitar alertas duplicados
+        cache_chave = f"lock:alerta:epi:{monitoramento.id_monitorar}:{evento}:{track_id}"
 
-        if agora - ultimo_alerta < 10:
-            return
+        # Se a chave já existir, significa que um alerta recente já foi registrado para este evento e track_id
+        if not self.redis_client.set(cache_chave, "1", ex=30, nx=True):
+            return # Já existe um alerta recente para este evento e track_id
 
         setor = self.setores_repository.get_setor_por_id_zona(monitoramento.id)
 
         if setor:
             responsaveis = self.setores_repository.get_responsaveis_por_setor(setor.id)
 
-            if not responsaveis:
-                return
-
-            for responsavel in responsaveis:
-                if self.alertas_service.criar_alerta(monitoramento, responsavel, evento):
-                    self._alert_cache[cache_chave] = agora
-
+            if responsaveis:
+                for responsavel in responsaveis:
+                    self.alertas_service.criar_alerta(monitoramento, responsavel, evento, severidade=severidade)
 
     def avaliar_postura(self, metodo, **kargs):
         """
@@ -746,28 +747,23 @@ class VisaoService:
         Registra um alerta de má postura no banco de dados, evitando duplicidade por ID.
         """
 
-        # A chave do cache usa 'postura' para não conflitar com EPIs do mesmo trabalhador
-        cache_chave = ('postura_fabrica', 'inclinacao_excessiva', track_id)
-        agora = time.monotonic()
-        ultimo_alerta = self._alert_cache.get(cache_chave, 0)
+        cache_chave = f"lock:alerta:postura:{camera_id}:{track_id}:{motivo}"
 
-        # Cooldown de 10 segundos antes de alertar de novo sobre a mesma pessoa
-        if agora - ultimo_alerta < 10:
+        # Evita alertas duplicados para o mesmo track_id e motivo dentro de um período de 30 segundos
+        if not self.redis_client.set(cache_chave, "1", ex=30, nx=True):
             return
-
+        
         setor = self.setores_repository.get_setor_por_id_camera(camera_id)
         
         if setor:
             responsaveis = self.setores_repository.get_responsaveis_por_setor(setor.id)
 
-            if not responsaveis:
-                return
+            if responsaveis:  
+                for responsavel in responsaveis:
+                    sucesso = self.alertas_service.criar_alerta(camera_id, responsavel, evento = motivo, severidade=severidade)
 
-            for responsavel in responsaveis:
-                sucesso = self.alertas_service.criar_alerta(camera_id, responsavel, evento = motivo, severidade=severidade)
-                if sucesso:
-                    self._alert_cache[cache_chave] = agora
-                    print(f"⚠️ Má postura detectada - ID: {track_id}")
+                    if sucesso:
+                        print(f"⚠️ Má postura detectada - ID: {track_id}")
 
 
     def desenhar_caixa_delimitadora(self, frame, box, label, color=(0, 255, 0)):

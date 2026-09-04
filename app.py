@@ -1,11 +1,16 @@
+from flask_session import Session
 from dotenv import load_dotenv
 from datetime import timedelta
 from flask_cors import CORS
 from flask import Flask
+import atexit
+import redis
 import os
 
-from extensions import socketio
+from extensions import socketio, REDIS_URL
 from events.alertas_events import register_socket_events
+from worker.vision_manager import iniciar_vision_workers, parar_vision_workers
+from connection.conn import Connection
 
 from controller.cameras_routes import create_cameras_bp
 from controller.setores_routes import create_setores_bp
@@ -15,17 +20,24 @@ from controller.visao_routes import create_visao_bp
 from controller.zonas_routes import create_zonas_bp
 from controller.epi_routes import create_epi_bp
 
-from connection.conn import Connection
-
 load_dotenv()  # Carrega as variáveis de ambiente do arquivo .env
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY')
 
+# Configuração da Sessão no Redis
+app.config['SESSION_TYPE'] = 'redis' # Configura o tipo de sessão para usar Redis
+app.config['SESSION_PERMANENT'] = True # Define a sessão como permanente
+app.config['SESSION_SESSION_LIFETIME'] = timedelta(hours=8)
+app.config['SESSION_USE_SIGNER'] = True # Habilita a assinatura do cookie de sessão para maior segurança
+app.config['SESSION_REDIS'] = redis.Redis.from_url(REDIS_URL) # Define a URL do Redis para armazen
+
+Session(app)  # Inicializa a sessão do Flask
+
 socketio.init_app(app, cors_allowed_origins="*")  # Inicializa o SocketIO com o aplicativo Flask
 register_socket_events(socketio)  # Registra os eventos do WebSocket
 
-DEV_INSECURE = os.getenv('DEV_INSECURE', 'false').lower() == 'true'
+DEV_INSECURE = os.getenv('DEV_INSECURE', 'false', message_queue=REDIS_URL).lower() == 'true'
 
 # Configurações de segurança para a sessão
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
@@ -62,4 +74,10 @@ app.register_blueprint(create_epi_bp(conn.get_connection()))
 
 
 if __name__ == '__main__':
+    atexit.register(parar_vision_workers)  # Registra a função para parar os workers ao encerrar o servidor
+
+    # Evita que o reloader do Flask (debug=True) inicie os workers 2 vezes no OpenCV
+    if os.environ.get('WERKZEUG_RUN_MAIN') == 'true' or not app.debug:
+        iniciar_vision_workers([1])
+
     socketio.run(host='0.0.0.0', port=5000, debug=True)

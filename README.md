@@ -9,6 +9,7 @@ API do Sistema de Proteção Individual (SPI), responsável por autenticação, 
 - `controller/`: rotas HTTP.
 - `services/`: regras de aplicação e serialização.
 - `repository/`: consultas e persistência.
+- `events/`: registro de eventos com WebSocket.
 - `models/` e `schemas/`: entidades e DTOs.
 - `core/`: segurança e tratamento de erros.
 - `assets/`: scripts SQL e recursos da visão computacional.
@@ -17,6 +18,7 @@ API do Sistema de Proteção Individual (SPI), responsável por autenticação, 
 
 - Python 3.10 ou superior.
 - PostgreSQL com o schema de `assets/tabelas_spi-postgres.sql`.
+- Redis.
 - Dependências de `requirements.txt`.
 
 ## Configuração local
