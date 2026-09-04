@@ -2,7 +2,10 @@ from dotenv import load_dotenv
 from datetime import timedelta
 from flask_cors import CORS
 from flask import Flask
+import atexit
 import os
+
+from worker.vision_manager import iniciar_vision_workers, parar_vision_workers
 
 from extensions import socketio
 from events.alertas_events import register_socket_events
@@ -62,4 +65,6 @@ app.register_blueprint(create_epi_bp(conn.get_connection()))
 
 
 if __name__ == '__main__':
+    atexit.register(parar_vision_workers)  # Registra a função para parar os workers ao encerrar o servidor
+    iniciar_vision_workers([0])
     socketio.run(host='0.0.0.0', port=5000, debug=True)

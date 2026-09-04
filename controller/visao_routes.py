@@ -1,6 +1,6 @@
 from flask import Blueprint, Response, jsonify, request
 from services.visao_service import VisaoService
-from vision_worker import VisionWorker
+from worker.vision_manager import workers
 import time
 import os
 
@@ -16,10 +16,9 @@ def create_visao_bp(connection):
     @visao_bp.route('/video/<int:camera_id>', methods=['GET'])
     def video(camera_id=1):
         worker = workers.get(camera_id)
-        if worker is None:
-            worker = VisionWorker(camera_id=camera_id)
-            workers[camera_id] = worker
-            worker.start()
+
+        if not worker:
+            return jsonify({"message": f"Worker para a câmera {camera_id} não está em execução."}), 503
 
         def generate():
             while True:

@@ -152,13 +152,20 @@ class AlertasService:
             if email_address and token_senha:
                 msg = EmailMessage()
 
-                corpo_email = f"Alerta de severidade crítica, na zona de monitoramento:\n - Zona: {nome_zona if nome_zona else 'Não especificada'}\n - Câmera: {nome_camera}\n - Setor: {nome_setor}!\n\nEvento: {evento}\nSeveridade: {severidade}\n\nPor favor, tome as medidas necessárias."
-
                 msg["Subject"] = "Alerta Crítico"
                 msg["From"] = email_address
                 msg["To"] = email
 
-                msg.set_content(corpo_email)
+                msg.set_content(
+                    f"Alerta de severidade crítica, na zona de monitoramento:\n\n"
+                    f"\n - Zona: {nome_zona if nome_zona else 'Nome não especificado'}"
+                    f"\n - Câmera: {nome_camera if nome_camera else 'Nome não especificado'}"
+                    f"\n - Setor: {nome_setor if nome_setor else 'Nome não especificado'}"
+                    f"\n - Evento: {evento if evento else 'Evento não especificado'}"
+                    f"\n - Severidade: {severidade}"
+
+                    f"\n\nPor favor, tome as medidas necessárias."
+                )
 
                 try:
                     with smtplib.SMTP('smtp.gmail.com', 587) as server:
