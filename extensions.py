@@ -1,7 +1,10 @@
 from flask_socketio import SocketIO
+from redis import Redis
 import os
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+
+redis_client = Redis.from_url(REDIS_URL, decode_responses=True)
 
 socketio = SocketIO()
 

@@ -9,11 +9,15 @@ from models.cameras import Camera
 from models.setores import Setor
 from models.zonas import Zona
 
-from extensions import socketio
+from tasks.email_task import task_enviar_email_alerta_critico
+from extensions import redis_client, emitir_evento_global
+from rq import Queue
 
 from email.message import EmailMessage
 import smtplib
 import os
+
+email_queue = Queue('emails', connection=redis_client)  # Cria uma fila de tarefas para envio de e-mails
 
 class AlertasService:
     def __init__(self, connection):
@@ -135,7 +139,7 @@ class AlertasService:
             'evento': evento,
             'severidade': severidade
         }
-        
+
         emitir_evento_global('novo_alerta', payload_notificao)
 
         if severidade == 3 and id_usuario:
@@ -147,36 +151,15 @@ class AlertasService:
         email = self.usuario_service.obter_email_usuario_por_id(id_usuario)
         
         if email:
-
-            email_address = os.getenv('EMAIL_ADDRESS')
-            token_senha = os.getenv('EMAIL_PASSWORD')
-
-            if email_address and token_senha:
-                msg = EmailMessage()
-
-                msg["Subject"] = "Alerta Crítico"
-                msg["From"] = email_address
-                msg["To"] = email
-
-                msg.set_content(
-                    f"Alerta de severidade crítica, na zona de monitoramento:\n\n"
-                    f"\n - Zona: {nome_zona if nome_zona else 'Nome não especificado'}"
-                    f"\n - Câmera: {nome_camera if nome_camera else 'Nome não especificado'}"
-                    f"\n - Setor: {nome_setor if nome_setor else 'Nome não especificado'}"
-                    f"\n - Evento: {evento if evento else 'Evento não especificado'}"
-                    f"\n - Severidade: {severidade}"
-
-                    f"\n\nPor favor, tome as medidas necessárias."
-                )
-
-                try:
-                    with smtplib.SMTP('smtp.gmail.com', 587) as server:
-                        server.starttls()
-                        server.login(email_address, token_senha)
-                        server.send_message(msg)
-
-                except Exception as e:
-                    print(f"Erro ao enviar email: {e}")
+            email_queue.enqueue(
+                task_enviar_email_alerta_critico,
+                email,
+                nome_zona,
+                nome_camera,
+                nome_setor,
+                evento,
+                severidade
+            )
 
     def deletar_alerta(self, id_alerta: int) -> bool:
         return self.alertas_repository.deletar_alerta(id_alerta)
