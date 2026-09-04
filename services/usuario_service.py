@@ -34,3 +34,11 @@ class UsuarioService:
         novo_usuario = self.user_repository.criar_usuario(email, hashed_password, nome, sobrenome, perfil, unidade, telefone)
 
         return novo_usuario
+
+    def obter_email_usuario_por_id(self, usuario_id: int) -> str | None:
+        email = self.user_repository.get_usuario_email_por_id(usuario_id)
+
+        if email:
+            return email
+
+        return None

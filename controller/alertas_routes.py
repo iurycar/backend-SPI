@@ -1,7 +1,8 @@
 from services.alertas_service import AlertasService
 from flask import Blueprint, jsonify, request
+from flask_socketio import SocketIO, emit
 
-def create_alertas_bp(connection):
+def create_alertas_bp(connection) -> Blueprint:
     alertas_bp = Blueprint('alertas', __name__)
     alertas_service = AlertasService(connection)
 

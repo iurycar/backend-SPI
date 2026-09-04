@@ -4,6 +4,9 @@ from flask_cors import CORS
 from flask import Flask
 import os
 
+from extensions import socketio
+from events.alertas_events import register_socket_events
+
 from controller.cameras_routes import create_cameras_bp
 from controller.setores_routes import create_setores_bp
 from controller.alertas_routes import create_alertas_bp
@@ -12,13 +15,15 @@ from controller.visao_routes import create_visao_bp
 from controller.zonas_routes import create_zonas_bp
 from controller.epi_routes import create_epi_bp
 
-
 from connection.conn import Connection
 
 load_dotenv()  # Carrega as variáveis de ambiente do arquivo .env
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY')
+
+socketio.init_app(app, cors_allowed_origins="*")  # Inicializa o SocketIO com o aplicativo Flask
+register_socket_events(socketio)  # Registra os eventos do WebSocket
 
 DEV_INSECURE = os.getenv('DEV_INSECURE', 'false').lower() == 'true'
 
@@ -35,7 +40,7 @@ if DEV_INSECURE:
 else:
     app.config['SESSION_COOKIE_HTTPONLY'] = True # Impede que o cookie seja acessado pelo JavaScript
     app.config['SESSION_COOKIE_SECURE'] = True # Garante que o cookie seja enviado apenas em conexões HTTPS
-    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' # Impede que o cookie seja enviado em solicitações de terceiros, mas permite em links normais
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 # Em desenvolvimento, aceita origens locais com credenciais. Em produção,
 # configure explicitamente as origens permitidas no ambiente de implantação.
@@ -57,4 +62,4 @@ app.register_blueprint(create_epi_bp(conn.get_connection()))
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    socketio.run(host='0.0.0.0', port=5000, debug=True)
