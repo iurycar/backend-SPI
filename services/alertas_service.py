@@ -5,6 +5,8 @@ from services.setores_service import SetoresService
 
 from extensions import emitir_evento_global
 
+from datetime import datetime, timedelta
+
 from models.cameras import Camera
 from models.setores import Setor
 from models.zonas import Zona
@@ -176,3 +178,10 @@ class AlertasService:
 
     def deletar_alerta(self, id_alerta: int) -> bool:
         return self.alertas_repository.deletar_alerta(id_alerta)
+
+    def obter_contagem_alertas_por_epi(self) -> list[dict]:
+        return self.alertas_repository.get_contagem_alertas_por_epi()
+
+    def obter_contagem_por_dia(self, dias: int = 30) -> list[dict]:
+        desde = datetime.now() - timedelta(days=dias)
+        return self.alertas_repository.get_contagem_por_dia(desde)

@@ -149,3 +149,50 @@ class AlertasRepository:
             self.conn.commit()
 
             return cursor.rowcount > 0
+
+    def get_contangem_por_tipo_epi(self) -> list[dict]:
+        with self.conn.cursor() as cursor:
+            query = """
+                SELECT COALESCE(e.categoria, 'Sem Categoria') AS categoria, COUNT(*) AS total
+                FROM alertas a
+                JOIN monitorar m ON m.id_monitorar = a.id_monitorar
+                LEFT JOIN epis e ON e.id_epi = m.id_epi
+                GROUP BY COALESCE(e.categoria, 'Sem Categoria')
+                ORDER BY total DESC;
+            """
+
+            cursor.execute(query)
+            resultados = cursor.fetchall()
+
+            valores: list[dict] = []
+
+            for categoria, total in resultados:
+                valores.append({
+                    "categoria": categoria,
+                    "total": total
+                })
+
+            return valores
+
+    def get_contagem_por_dia(self, desde) -> list[dict]:
+        with self.conn.cursor() as cursor:
+            query = """
+                SELECT DATE(a.data_hora) AS dia, COUNT(*) AS total
+                FROM alertas a
+                WHERE a.data_hora >= %s
+                GROUP BY DATE(a.data_hora)
+                ORDER BY dia ASC;
+            """
+
+            cursor.execute(query, (desde,))
+            resultados = cursor.fetchall()
+
+            valores: list[dict] = []
+
+            for dia, total in resultados:
+                valores.append({
+                    "dia": dia.strftime("%Y-%m-%d"),
+                    "total": total
+                })
+
+            return valores
