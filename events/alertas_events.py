@@ -1,7 +1,7 @@
 from flask_socketio import emit
 from extensions import socketio
 
-def register_socket_events():
+def register_socket_events(sio=None):
     @socketio.on('connect')
     def handle_connect():
         print('Cliente conectado')

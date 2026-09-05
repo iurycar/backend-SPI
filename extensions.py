@@ -20,7 +20,7 @@ def emitir_evento_global(evento: str, dados: dict):
 
     try:
         emitter = SocketIO(message_queue=REDIS_URL)
-        emitter.emit(evento, dados, broadcast=True)
+        emitter.emit(evento, dados)
 
     except Exception as e:
         print(f"Erro ao emitir evento global: {e}")

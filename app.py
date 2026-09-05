@@ -7,9 +7,9 @@ import atexit
 import redis
 import os
 
-from extensions import socketio, REDIS_URL
 from events.alertas_events import register_socket_events
 from worker.vision_manager import iniciar_vision_workers, parar_vision_workers
+from extensions import socketio, REDIS_URL
 from connection.conn import Connection
 
 from controller.cameras_routes import create_cameras_bp
@@ -34,10 +34,10 @@ app.config['SESSION_REDIS'] = redis.Redis.from_url(REDIS_URL) # Define a URL do 
 
 Session(app)  # Inicializa a sessão do Flask
 
-socketio.init_app(app, cors_allowed_origins="*")  # Inicializa o SocketIO com o aplicativo Flask
+socketio.init_app(app, cors_allowed_origins="*", message_queue=REDIS_URL)  # Inicializa o SocketIO com o aplicativo Flask
 register_socket_events(socketio)  # Registra os eventos do WebSocket
 
-DEV_INSECURE = os.getenv('DEV_INSECURE', 'false', message_queue=REDIS_URL).lower() == 'true'
+DEV_INSECURE = os.getenv('DEV_INSECURE', 'false').lower() == 'true'
 
 # Configurações de segurança para a sessão
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
@@ -80,4 +80,4 @@ if __name__ == '__main__':
     if os.environ.get('WERKZEUG_RUN_MAIN') == 'true' or not app.debug:
         iniciar_vision_workers([1])
 
-    socketio.run(host='0.0.0.0', port=5000, debug=True)
+    socketio.run(app, host='0.0.0.0', port=5000, debug=True, use_reloader=False)
