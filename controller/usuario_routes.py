@@ -25,7 +25,7 @@ def create_user_bp(connection):
                 session['user_sobrenome'] = user.sobrenome
                 session['user_unidade'] = user.unidade
                 session['user_telefone'] = user.telefone
-                session['user_admin'] = user.admin
+                session['user_admin'] = user.is_admin()
                 session['user_ativo'] = user.ativo
                 session['user_acesso'] = str(user.acesso) if user.acesso else None
 
@@ -40,7 +40,7 @@ def create_user_bp(connection):
                         'perfil': user.perfil,
                         'unidade': user.unidade,
                         'telefone': user.telefone,
-                        'admin': user.admin,
+                        'admin': user.is_admin(),
                         'ativo': user.ativo
                     }
                 }), 200

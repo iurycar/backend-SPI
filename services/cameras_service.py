@@ -10,13 +10,15 @@ class CamerasService:
 
         cameras_lista: list[dict] = []
 
-        for camera in cameras:
-            camera_dict = {
-                'id': camera.id,
-                'ip': camera.ip,
-                'id_setor': camera.id_setor
-            }
-            cameras_lista.append(camera_dict)
+        if cameras:
+            for camera in cameras:
+                camera_dict = {
+                    'id': camera.id,
+                    'nome': camera.nome,
+                    'ip': camera.ip,
+                    'id_setor': camera.id_setor
+                }
+                cameras_lista.append(camera_dict)
 
         return cameras_lista
 
@@ -26,6 +28,7 @@ class CamerasService:
         if camera:
             return {
                 'id': camera.id,
+                'nome': camera.nome,
                 'ip': camera.ip,
                 'id_setor': camera.id_setor
             }
@@ -41,6 +44,7 @@ class CamerasService:
             for camera in cameras:
                 camera_dict = {
                     'id': camera.id,
+                    'nome': camera.nome,
                     'ip': camera.ip,
                     'id_setor': camera.id_setor
                 }
@@ -55,11 +59,12 @@ class CamerasService:
             print(f"Erro ao criar CameraDTO: {e}")
             return None
         
-        camera = self.cameras_repository.registrar_camera(camera_dto.ip, camera_dto.id_setor)
+        camera = self.cameras_repository.registrar_camera(camera_dto.ip, camera_dto.id_setor, camera_dto.nome)
 
         if camera:
             return {
                 'id': camera.id,
+                'nome': camera.nome,
                 'ip': camera.ip,
                 'id_setor': camera.id_setor
             }
@@ -73,11 +78,12 @@ class CamerasService:
             print(f"Erro ao criar CameraDTO: {e}")
             return None
 
-        camera = self.cameras_repository.atualizar_camera(camera_id, camera_dto.ip, camera_dto.id_setor)
+        camera = self.cameras_repository.atualizar_camera(camera_id, camera_dto.ip, camera_dto.id_setor, camera_dto.nome)
 
         if camera:
             return {
                 'id': camera.id,
+                'nome': camera.nome,
                 'ip': camera.ip,
                 'id_setor': camera.id_setor
             }

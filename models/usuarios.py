@@ -38,7 +38,7 @@ class Usuario:
         return self.perfil
 
     def is_admin(self) -> bool:
-        return self.perfil == "admin"
+        return self.perfil.lower() in ("admin", "administrador")
 
     def get_unidade(self) -> str | None:
         return self.unidade

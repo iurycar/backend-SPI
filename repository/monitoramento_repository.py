@@ -11,11 +11,11 @@ class MonitoramentoRepository:
         with self.connection.cursor() as cursor:
             # Uso do LEFT JOIN para garantir que zonas sem EPIs (proibidas) também sejam retornadas
             query = """
-                SELECT m.id_monitorar, m.id_camera, m.id_zona, m.id_epi, z.nome, z.x, z.y, z.largura, z.altura, z.permitido, e.categoria
+                SELECT m.id_monitorar, z.id_camera, m.id_zona, m.id_epi, z.nome, z.x, z.y, z.largura, z.altura, z.permitido, e.categoria
                 FROM zonas z
                 JOIN monitorar m ON z.id_zona = m.id_zona
                 LEFT JOIN epis e ON m.id_epi = e.id_epi
-                WHERE m.id_camera = %s
+                WHERE z.id_camera = %s
             """
 
             cursor.execute(query, (camera_id,))
@@ -38,10 +38,10 @@ class MonitoramentoRepository:
                         zona_existente.epis_categoria.append(categoria_epi)
 
                 else:
-                    x = int(monitorar[5])
-                    y = int(monitorar[6])
-                    largura = int(monitorar[7])
-                    altura = int(monitorar[8])
+                    x = float(monitorar[5])
+                    y = float(monitorar[6])
+                    largura = float(monitorar[7])
+                    altura = float(monitorar[8])
 
                     regiao = [
                         (x, y),
