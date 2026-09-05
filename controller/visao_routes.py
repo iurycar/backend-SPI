@@ -33,10 +33,14 @@ def create_visao_bp(connection):
 
         return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-    @visao_bp.route('/detections', methods=['GET'])
-    def detections():
+    @visao_bp.route('/detections/<int:camera_id>', methods=['GET'])
+    def detections(camera_id):
         if workers:
-            worker = next(reversed(workers.values()))
+            worker = workers.get(camera_id)
+
+            if worker is None:
+                return jsonify({"message": f"Worker para a câmera {camera_id} não está em execução."}), 503
+            
             return jsonify(worker.get_last_results())
         return jsonify(visao_service.get_last_results())
 
