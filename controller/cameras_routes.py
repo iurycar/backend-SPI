@@ -1,3 +1,4 @@
+from worker.vision_manager import get_camera_status, notificar_desligamento_camera
 from services.cameras_service import CamerasService
 from services.zonas_service import ZonasService
 from flask import Blueprint, jsonify, request
@@ -66,8 +67,29 @@ def create_cameras_bp(connection):
         successo = cameras_service.deletar_camera(camera_id)
 
         if successo:
+            notificar_desligamento_camera(camera_id)
             return jsonify({'message': 'Câmera deletada com sucesso'}), 200
         else:
             return jsonify({'message': 'Falha ao deletar a câmera'}), 400
+
+    @cameras_bp.route('/cameras/status', methods=['GET'])
+    def listar_status_cameras():
+        # Verifica os workers ativos e obtém o status de cada câmera
+        cameras = cameras_service.listar_cameras()
+        cameras_status = []
+
+        for camera in cameras:
+            camera_id = camera['id']
+            status = get_camera_status(camera_id)
+
+            cameras_status.append({
+                'id': camera_id,
+                'nome': camera['nome'],
+                'ip': camera['ip'],
+                'id_setor': camera['id_setor'],
+                'status': status
+            })
+
+        return jsonify(cameras_status), 200
 
     return cameras_bp

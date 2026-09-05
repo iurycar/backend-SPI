@@ -2,13 +2,13 @@ from models.zonas import Zona
 
 class MonitoramentoRepository:
     def __init__(self, connection):
-        self.connection = connection
+        self.conn = connection
 
     def get_zonas_monitoradas_por_id_camera(self, camera_id) -> list[Zona]:
         """
         Retorna uma lista de objetos Zona para uma câmera específica.
         """
-        with self.connection.cursor() as cursor:
+        with self.conn.cursor() as cursor:
             # Uso do LEFT JOIN para garantir que zonas sem EPIs (proibidas) também sejam retornadas
             query = """
                 SELECT m.id_monitorar, z.id_camera, m.id_zona, m.id_epi, z.nome, z.x, z.y, z.largura, z.altura, z.permitido, e.categoria

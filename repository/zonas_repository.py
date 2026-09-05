@@ -73,6 +73,16 @@ class ZonasRepository:
             
             return None
 
+    def get_id_camera_por_zona(self, zona_id: int) -> int | None:
+        with self.conn.cursor() as cursor:
+            cursor.execute("SELECT id_camera FROM zonas WHERE id_zona = %s", (zona_id,))
+            result = cursor.fetchone()
+
+            if result:
+                return result[0]
+            else:
+                return None
+
     def registrar_zona(self, nome: str | None, id_camera: int, x: float = 0.0, y: float = 0.0, largura: float = 1.0, altura: float = 1.0, permitido: bool = True) -> Zona | None:
         with self.conn.cursor() as cursor:
             try:

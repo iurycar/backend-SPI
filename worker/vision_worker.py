@@ -17,6 +17,7 @@ class VisionWorker:
             return
 
         self.stop_event = mp.Event()
+        self.reload_zones_event = mp.Event()
         self.frame_queue = mp.Queue(maxsize=1)
         self.last_results = mp.Manager().dict()
         self.last_results['detections'] = []
@@ -25,11 +26,21 @@ class VisionWorker:
         self.process = mp.Process(
             target=self._run,
             # REMOVA 'connection' DOS ARGUMENTOS:
-            args=(self.camera_id, self.frame_queue, self.last_results, self.stop_event),
+            args=(self.camera_id, 
+                  self.frame_queue, 
+                  self.last_results, 
+                  self.stop_event, 
+                  self.reload_zones_event
+            ),
             daemon=True,
         )
 
         self.process.start()
+
+    def reload_zones(self):
+        if self.reload_zones_event is not None:
+            self.reload_zones_event.set()
+            print(f"🔄 Worker de visão para a câmera {self.camera_id} recebeu sinal para recarregar zonas.")
 
     def stop(self):
         if self.stop_event is not None:
@@ -38,7 +49,7 @@ class VisionWorker:
         if self.process is not None and self.process.is_alive():
             self.process.join(timeout=3)
 
-    def _run(self, camera_id, frame_queue, last_results, stop_event):
+    def _run(self, camera_id, frame_queue, last_results, stop_event, reload_zones_event):
         try:
             from connection.conn import Connection
             connection = Connection().get_connection()
@@ -50,6 +61,7 @@ class VisionWorker:
                 frame_queue=frame_queue,
                 last_results=last_results,
                 stop_event=stop_event,
+                reload_zones_event=reload_zones_event,
             )
 
         except Exception as exc:
@@ -68,3 +80,19 @@ class VisionWorker:
         if self.last_results is None:
             return []
         return self.last_results.get('detections', [])
+
+    def is_online(self) -> bool:
+        """
+            Retorna True se o processo estiver vivo e se recebeu um frame nos últimos 5 segundos.
+        """
+
+        if not self.process or not self.process.is_alive():
+            return False
+
+        if self.last_results is None:
+            return False
+
+        connected = self.last_results.get('connected', False)
+        last_frame_time = self.last_results.get('last_frame_time', 0)
+
+        return connected and (time.time() - last_frame_time) < 5
