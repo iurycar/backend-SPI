@@ -119,31 +119,44 @@ class AlertasService:
     def marcar_alerta_resolvido(self, id_alerta: int) -> bool:
         return self.alertas_repository.marcar_alerta_resolvido(id_alerta)
 
-    def criar_alerta(self, monitoramento: Zona, id_usuario: int | None, evento: str, severidade: int = 1) -> bool:
+    def criar_alerta(self, monitoramento: Zona | dict, id_usuario: int | None, evento: str, severidade: int = 1) -> bool:
         sucesso = self.alertas_repository.criar_alerta(monitoramento.id_monitorar, id_usuario, evento, severidade)
 
         if not sucesso:
             return False
 
-        camera: Camera = self.cameras_service.obter_camera_por_id(monitoramento.id_camera)
-        setor: Setor = self.setores_service.obter_setor_por_id(monitoramento.id_setor)
+        # Ambos retornam dicionários (dict) ou None
+        camera_dict = self.cameras_service.obter_camera_por_id(monitoramento.id_camera)
+        setor_dict = self.setores_service.obter_setor_por_id_zona(monitoramento.id)
+
+        # Use .get() para dicionários
+        nome_camera = camera_dict.get('nome') if camera_dict else None
+        nome_setor = setor_dict.get('nome') if setor_dict else None
+
+        # Se monitoramento for uma classe Zona: monitoramento.nome
+        # Se monitoramento vier como dict: monitoramento.get('nome')
+        nome_zona = getattr(monitoramento, 'nome', None) or (monitoramento.get('nome') if isinstance(monitoramento, dict) else None)
+        id_monitorar = getattr(monitoramento, 'id_monitorar', None) or (monitoramento.get('id_monitorar') if isinstance(monitoramento, dict) else None)
+        id_camera = getattr(monitoramento, 'id_camera', None) or (monitoramento.get('id_camera') if isinstance(monitoramento, dict) else None)
+        id_zona = getattr(monitoramento, 'id_zona', None) or (monitoramento.get('id_zona') if isinstance(monitoramento, dict) else None)
 
         payload_notificao = {
-            'id_monitorar': monitoramento.id_monitorar,
-            'id_camera': monitoramento.id_camera,
-            'id_zona': monitoramento.id_zona,
+            'id_monitorar': id_monitorar,
+            'id_camera': id_camera,
+            'id_zona': id_zona,
             'id_usuario': id_usuario,
-            'nome_zona': monitoramento.nome,
-            'nome_camera': camera.nome if camera else None,
-            'nome_setor': setor.nome if setor else None,
+            'nome_zona': nome_zona,
+            'nome_camera': nome_camera,
+            'nome_setor': nome_setor,
             'evento': evento,
             'severidade': severidade
         }
 
+        print(f"Alerta criado: {payload_notificao}")
         emitir_evento_global('novo_alerta', payload_notificao)
 
         if severidade == 3 and id_usuario:
-            self._enviar_email_alerta_critico(id_usuario, monitoramento.nome, camera.nome, setor.nome, evento, severidade)
+            self._enviar_email_alerta_critico(id_usuario, nome_zona, nome_camera, nome_setor, evento, severidade)
 
         return True
 
