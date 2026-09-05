@@ -94,22 +94,3 @@ class CamerasService:
     def deletar_camera(self, camera_id: int) -> bool:
         successo = self.cameras_repository.deletar_camera(camera_id)
         return successo
-
-    def listar_status_cameras(self) -> list[dict]:
-        # Verifica os workers ativos e obtém o status de cada câmera
-        cameras = self.listar_cameras()
-        cameras_status = []
-
-        for camera in cameras:
-            camera_id = camera['id']
-            status = get_camera_status(camera_id)
-
-            cameras_status.append({
-                'id': camera_id,
-                'nome': camera['nome'],
-                'ip': camera['ip'],
-                'id_setor': camera['id_setor'],
-                'status': status
-            })
-
-        return cameras_status
