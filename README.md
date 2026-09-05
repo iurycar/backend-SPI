@@ -5,20 +5,22 @@ API do Sistema de Proteção Individual (SPI), responsável por autenticação, 
 ## Arquitetura
 
 - `app.py`: configuração do Flask, sessão, CORS e registro dos blueprints.
+- `assets/`: scripts SQL e recursos da visão computacional.
 - `connection/`: conexão com PostgreSQL.
 - `controller/`: rotas HTTP.
-- `services/`: regras de aplicação e serialização.
-- `repository/`: consultas e persistência.
-- `events/`: registro de eventos com WebSocket.
-- `models/` e `schemas/`: entidades e DTOs.
 - `core/`: segurança e tratamento de erros.
-- `assets/`: scripts SQL e recursos da visão computacional.
+- `events/`: registro de eventos com WebSocket.
+- `models/`: entidades.
+- `repository/`: consultas e persistência.
+- `schemas/`: DTOs (Data Transference Objects).
+- `services/`: regras de aplicação e serialização.
 
 ## Requisitos
 
 - Python 3.10 ou superior.
 - PostgreSQL com o schema de `assets/tabelas_spi-postgres.sql`.
 - Redis.
+- Mosquitto.
 - Dependências de `requirements.txt`.
 
 ## Configuração local
@@ -43,6 +45,10 @@ Variáveis usadas: `SECRET_KEY`, `DEV_INSECURE`, `DB_HOST`, `DB_PORT`, `DB_USER`
 ```bash
 python -c "import secrets; print(secrets.token_hex(32))"
 ```
+
+### Alarme
+
+Criação e configuração do alarme, está especificado no repositório: [Alarme ESP32 MQTT](https://github.com/iurycar/alarme-esp32)
 
 ## Execução
 
