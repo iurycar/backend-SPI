@@ -1,30 +1,13 @@
-from services.cameras_service import CamerasService
 from worker.vision_worker import VisionWorker
-from connection.conn import Connection
 
 workers: dict[int, VisionWorker] = {}
 
-def iniciar_todos_os_workers():
+def iniciar_todos_os_workers(cameras_id: list[int]):
     """
         Lista todas as câmeras cadastradas e inicia um VisionWorker para cada uma delas.
     """
-
-    connection = Connection().get_connection()
-    cameras_service = CamerasService(connection)
-
-    cameras = cameras_service.listar_cameras()
-
-    if not cameras:
-        print("⚠️ Nenhuma câmera cadastrada no banco de dados.")
-        return
-
-    for camera in cameras:
-        camera_id = camera.get('id') if isinstance(camera, dict) else getattr(camera, 'id', None)
-
-        if camera_id is None:
-            cam_id = camera.get('id_camera') if isinstance(camera, dict) else getattr(camera, 'id_camera', None)
-
-        if camera_id is not None and camera_id not in workers:
+    for camera_id in cameras_id:
+        if camera_id not in workers:
             worker = VisionWorker(camera_id=camera_id)
             worker.start()
             workers[camera_id] = worker

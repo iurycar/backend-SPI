@@ -8,7 +8,8 @@ import redis
 import os
 
 from events.alertas_events import register_socket_events
-from worker.vision_manager import iniciar_vision_workers, parar_vision_workers
+from worker.vision_manager import iniciar_todos_os_workers, parar_vision_workers
+from services.cameras_service import CamerasService
 from extensions import socketio, REDIS_URL
 from connection.conn import Connection
 
@@ -76,8 +77,17 @@ app.register_blueprint(create_epi_bp(conn.get_connection()))
 if __name__ == '__main__':
     atexit.register(parar_vision_workers)  # Registra a função para parar os workers ao encerrar o servidor
 
+    # Pega todas as câmeras cadastradas no banco de dados e inicia um VisionWorker para cada uma delas
+    connection = Connection().get_connection()
+    cameras_service = CamerasService(connection)
+
     # Evita que o reloader do Flask (debug=True) inicie os workers 2 vezes no OpenCV
     if os.environ.get('WERKZEUG_RUN_MAIN') == 'true' or not app.debug:
-        iniciar_vision_workers([1])
+        cameras_id = []
+
+        for camera in cameras_service.listar_cameras():
+            cameras_id.append(camera['id'])
+
+        iniciar_todos_os_workers(cameras_id=cameras_id)
 
     socketio.run(app, host='0.0.0.0', port=5000, debug=True, use_reloader=False)

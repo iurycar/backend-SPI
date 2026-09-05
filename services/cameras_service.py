@@ -1,5 +1,4 @@
 from repository.cameras_repository import CamerasRepository
-from worker.vision_manager import get_camera_status
 from schemas.camera_dto import CameraDTO
 
 class CamerasService:
