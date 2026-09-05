@@ -70,3 +70,18 @@ class MonitoramentoRepository:
                     zonas.append(zona)
 
             return zonas
+
+    def get_alarme_por_id_monitorar(self, id_monitorar: int) -> dict | None:
+            with self.conn.cursor() as cursor:
+                query = "SELECT a.id_alarme, a.endereco, a.id_monitorar FROM alarmes a WHERE a.id_monitorar = %s;"
+                cursor.execute(query, (id_monitorar,))
+                alarme = cursor.fetchone()
+    
+                if alarme:
+                    return {
+                        "id_alarme": alarme[0],
+                        "endereco": alarme[1],
+                        "id_monitorar": alarme[2]
+                    }
+                else:
+                    return None

@@ -17,6 +17,8 @@ from services.alertas_service import AlertasService
 from models.alertas import Alerta
 from models.zonas import Zona
 
+from tasks.alarme_task import enviar_comando
+
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, 'assets', 'modelo', 'treinamento', 'weights', 'best.pt')
 MODEL_PATH_POSE = os.path.join(BASE_DIR, 'assets', 'modelo', 'treinamento', 'weights', 'yolov8s-pose.pt')
@@ -532,6 +534,13 @@ class VisaoService:
             evento=evento,
             severidade=severidade
         )
+
+        alarme = self.monitoramento_repository.get_alarme_por_id_monitorar(monitoramento.id_monitorar)
+
+        if not alarme:
+            return
+
+        enviar_comando(comando="DISPARAR", endereco_esp32=alarme['endereco'])
 
     def avaliar_postura(self, metodo, **kargs):
         """

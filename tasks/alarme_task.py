@@ -6,6 +6,12 @@ BROKER_ADDRESS = os.environ.get("BROKER_ADDRESS", "localhost")  # Endereço do b
 PORT = int(os.environ.get("BROKER_PORT", 1883))  # Porta do broker MQTT
 
 def enviar_comando(comando: str, endereco_esp32: str):
+    """Função para enviar um comando via MQTT para o ESP32.
+    Args:
+        comando (str): O comando a ser enviado (ex: "DISPARAR", "RESET").
+        endereco_esp32 (str): O endereço do ESP32 para o qual o comando será enviado.
+    """
+    
     try:
         topico = f"alarme/{endereco_esp32}/comando"
 
