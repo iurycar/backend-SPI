@@ -13,6 +13,7 @@ import os
 
 from repository.monitoramento_repository import MonitoramentoRepository
 from repository.setores_repository import SetoresRepository
+from services.cameras_service import CamerasService
 from services.alertas_service import AlertasService
 from models.alertas import Alerta
 from models.zonas import Zona
@@ -53,6 +54,7 @@ class VisaoService:
         self.monitoramento_repository = MonitoramentoRepository(connection)
         self.setores_repository = SetoresRepository(connection)
         self.alertas_service = AlertasService(connection)
+        self.cameras_service = CamerasService(connection)
 
         self.redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 
@@ -76,7 +78,48 @@ class VisaoService:
         if self.modelo_pose is None:
             self.modelo_pose = YOLO(MODEL_PATH_POSE)
 
-    def open_camera(self):
+    def open_camera(self, camera_id: int):
+        """
+            Abre o stream de vídeo RTSP da câmera com ID especificado
+            Se não encontrar RTSP ou falhar, faz fallback para webcam local.
+        """
+        # RTSP = Real Time Streaming Protocol, usado para transmitir vídeo em tempo real de câmeras IP.
+        # FFmpeg = Biblioteca de código aberto para processar vídeo e áudio, usada aqui para capturar o stream RTSP.
+        # TCP = Transmission Control Protocol, garante entrega confiável de dados, usado aqui para reduzir perda de frames no stream RTSP.
+
+        rtsp_url = None
+
+        try:
+            # Busca os dados da câmera por ID
+            camera = self.cameras_service.obter_camera_por_id(camera_id)
+
+            if camera:
+                # Pega o RTSP da câmera
+                rtsp_url = camera.get('ip') if isinstance(camera, dict) else getattr(camera, 'ip', None)
+
+        except Exception as e:
+            print(f"❌ Erro ao obter RTSP da câmera {camera_id}: {e}")
+
+
+        # Se tiver URL RTSP, abre via FFMPEG forçando TCP
+        if rtsp_url:
+            print(f"🔗 Conectando ao RTSP da câmera {camera_id}: {rtsp_url}")
+
+            # Define flags do FFmpeg via variáveis de ambiente para reduzir latência
+            os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = "rtsp_transport;tcp|buffer_size;1024000|max_delay;500000"
+
+            cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
+
+            # Limita buffer interno do OpenCV para evitar delay acumulado
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+            if cap.isOpened():
+                self.cap = cap
+                return self.cap
+            else:
+                print(f"❌ Falha ao abrir RTSP da câmera {camera_id}. Tentando fallback para webcam local.")
+
+        # Fallback para webcam local
         cam_idx, backend = self.find_camera()
 
         if cam_idx is None:
@@ -106,7 +149,8 @@ class VisaoService:
         """
         Encontra uma câmera disponível no sistema.
         """
-
+        
+        cameras = self.cameras_service.listar_cameras()
         backend = self.get_plataform_camera()
 
         for index in range(5):
@@ -294,7 +338,7 @@ class VisaoService:
             )
 
     def run_video_loop(self, camera_id: int = 1, frame_queue=None, last_results=None, stop_event=None):
-        """Executa o loop de processamento em um processo separado."""
+        """Executa o loop de processamento em um processo separado com reconexão automática."""
         self.ensure_models_loaded()
         zonas_configuradas = self.zonas_de_monitoramento(camera_id)
 
@@ -304,20 +348,24 @@ class VisaoService:
                 last_results['class_count'] = {}
             return
 
-        self.cap = self.open_camera()
-
-        if self.cap is None or not self.cap.isOpened():
-            if last_results is not None:
-                last_results['detections'] = []
-                last_results['class_count'] = {}
-            return
+        self.cap = self.open_camera(camera_id)
 
         try:
             while not (stop_event is not None and stop_event.is_set()):
+                if self.cap is None or not self.cap.isOpened():
+                    print(f"🔄 Tentando reconectar à câmera {camera_id} em 5s...")
+                    time.sleep(5)
+                    self.cap = self.open_camera(camera_id)
+                    continue
+
                 sucesso, frame = self.cap.read()
 
                 if not sucesso:
-                    break
+                    print(f"⚠️ Perda de sinal no stream da câmera {camera_id}. Reiniciando captura...")
+                    self.cap.release()
+                    self.cap = None
+                    time.sleep(2)
+                    continue
 
                 detections, class_count = self.object_detection(frame, zonas_configuradas)
 
@@ -340,9 +388,16 @@ class VisaoService:
                 sucesso, buffer = cv2.imencode('.jpg', frame)
                 if sucesso and frame_queue is not None:
                     try:
+                        if frame_queue.full():
+                            try:
+                                frame_queue.get_nowait()  # Remove o frame antigo se a fila estiver cheia
+                            except Exception:
+                                pass
                         frame_queue.put(buffer.tobytes(), block=False)
+
                     except Exception:
                         pass
+        
         finally:
             if self.cap is not None:
                 self.cap.release()
