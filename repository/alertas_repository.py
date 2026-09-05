@@ -196,3 +196,18 @@ class AlertasRepository:
                 })
 
             return valores
+
+    def get_monitoramento_por_id_alerta(self, id_alerta: int) -> dict | None:
+        with self.conn.cursor() as cursor:
+            query = "SELECT m.id_monitorar, m.id_zona, m.id_epi FROM monitorar m JOIN alertas a ON m.id_monitorar = a.id_monitorar WHERE a.id_alerta = %s;"
+            cursor.execute(query, (id_alerta,))
+            monitoramento = cursor.fetchone()
+
+            if monitoramento:
+                return {
+                    'id_monitorar': monitoramento[0],
+                    'id_zona': monitoramento[1],
+                    'id_epi': monitoramento[2]
+                }
+            else:
+                return None

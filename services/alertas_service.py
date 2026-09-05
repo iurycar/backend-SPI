@@ -1,3 +1,4 @@
+from repository.monitoramento_repository import MonitoramentoRepository
 from repository.alertas_repository import AlertasRepository
 from services.usuario_service import UsuarioService
 from services.cameras_service import CamerasService
@@ -13,6 +14,7 @@ from models.zonas import Zona
 
 from tasks.email_task import task_enviar_email_alerta_critico
 from extensions import redis_client, emitir_evento_global
+from tasks.alarme_task import enviar_comando
 from rq import Queue
 
 from email.message import EmailMessage
@@ -24,6 +26,7 @@ email_queue = Queue('emails', connection=redis_client)  # Cria uma fila de taref
 class AlertasService:
     def __init__(self, connection):
         self.connection = connection
+        self.monitoramento_repository = MonitoramentoRepository(connection)
         self.alertas_repository = AlertasRepository(connection)
         self.usuario_service = UsuarioService(connection)
         self.cameras_service = CamerasService(connection)
@@ -119,7 +122,16 @@ class AlertasService:
         return None
 
     def marcar_alerta_resolvido(self, id_alerta: int) -> bool:
-        return self.alertas_repository.marcar_alerta_resolvido(id_alerta)
+        sucesso = self.alertas_repository.marcar_alerta_resolvido(id_alerta)
+
+        # Desligar remotamente o alarme associado ao alerta, se houver
+        monitoramento = self.alertas_repository.get_monitoramento_por_id_alerta(id_alerta)
+        alarme = self.monitoramento_repository.get_alarme_por_id_monitorar(monitoramento['id_monitorar'])
+
+        if alarme:
+            enviar_comando(comando="RESET", endereco_esp32=alarme['endereco'])
+
+        return sucesso
 
     def registrar_alertas_com_notificacao_unica(self, monitoramento: Zona | dict, responsaveis: list[int], evento: str, severidade: int = 1) -> bool:
         """
