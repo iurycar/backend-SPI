@@ -5,11 +5,11 @@ from services.visao_service import VisaoService
 from connection.conn import Connection
 
 class VisionWorker:
-    def __init__(self, camera_id=1):
+    def __init__(self, camera_id=1, alertas_queue=None):
         self.camera_id = camera_id
+        self.alertas_queue = alertas_queue
         self.process = None
         self.stop_event = None
-        self.frame_queue = None
         self.last_results = mp.Manager().dict()
 
     def start(self):
@@ -17,15 +17,15 @@ class VisionWorker:
             return
 
         self.stop_event = mp.Event()
-        self.frame_queue = mp.Queue(maxsize=1)
         self.last_results = mp.Manager().dict()
         self.last_results['detections'] = []
         self.last_results['class_count'] = {}
+        self.last_results['last_frame'] = None
 
         self.process = mp.Process(
             target=self._run,
             # REMOVA 'connection' DOS ARGUMENTOS:
-            args=(self.camera_id, self.frame_queue, self.last_results, self.stop_event),
+            args=(self.camera_id, self.last_results, self.stop_event, self.alertas_queue),
             daemon=True,
         )
 
@@ -38,16 +38,15 @@ class VisionWorker:
         if self.process is not None and self.process.is_alive():
             self.process.join(timeout=3)
 
-    def _run(self, camera_id, frame_queue, last_results, stop_event):
+    def _run(self, camera_id, last_results, stop_event, alertas_queue):
         try:
             from connection.conn import Connection
-            connection = Connection().get_connection()
+            connection = Connection()
 
-            visao_service = VisaoService(connection)
+            visao_service = VisaoService(connection, alertas_queue=alertas_queue)
 
             visao_service.run_video_loop(
                 camera_id=camera_id,
-                frame_queue=frame_queue,
                 last_results=last_results,
                 stop_event=stop_event,
             )
@@ -56,13 +55,10 @@ class VisionWorker:
             print(f"❌ Worker de visão falhou: {exc}")
 
     def next_frame(self):
-        if self.frame_queue is None:
+        if self.last_results is None:
             return None
 
-        try:
-            return self.frame_queue.get_nowait()
-        except Exception:
-            return None
+        return self.last_results.get('last_frame')
 
     def get_last_results(self):
         if self.last_results is None:

@@ -8,65 +8,66 @@ class MonitoramentoRepository:
         """
         Retorna uma lista de objetos Zona para uma câmera específica.
         """
-        with self.connection.cursor() as cursor:
-            # Uso do LEFT JOIN para garantir que zonas sem EPIs (proibidas) também sejam retornadas
-            query = """
-                SELECT m.id_monitorar, m.id_camera, m.id_zona, m.id_epi, z.nome, z.x, z.y, z.largura, z.altura, z.permitido, e.categoria
-                FROM zonas z
-                JOIN monitorar m ON z.id_zona = m.id_zona
-                LEFT JOIN epis e ON m.id_epi = e.id_epi
-                WHERE m.id_camera = %s
-            """
+        with self.connection.get_connection() as conn:
+            with conn.cursor() as cursor:
+                # Uso do LEFT JOIN para garantir que zonas sem EPIs (proibidas) também sejam retornadas
+                query = """
+                    SELECT m.id_monitorar, m.id_camera, m.id_zona, m.id_epi, z.nome, z.x, z.y, z.largura, z.altura, z.permitido, e.categoria
+                    FROM zonas z
+                    JOIN monitorar m ON z.id_zona = m.id_zona
+                    LEFT JOIN epis e ON m.id_epi = e.id_epi
+                    WHERE m.id_camera = %s
+                """
 
-            cursor.execute(query, (camera_id,))
-            consulta = cursor.fetchall()
+                cursor.execute(query, (camera_id,))
+                consulta = cursor.fetchall()
 
-            if not consulta:
-                return [] # Retornar lista vazia em vez de None evita erro de iteração no service
+                if not consulta:
+                    return [] # Retornar lista vazia em vez de None evita erro de iteração no service
 
-            zonas: list[Zona] = []
+                zonas: list[Zona] = []
 
-            for monitorar in consulta:
-                zona_id = monitorar[2]
-                categoria_epi = monitorar[10]
-                permitido = bool(monitorar[9])
+                for monitorar in consulta:
+                    zona_id = monitorar[2]
+                    categoria_epi = monitorar[10]
+                    permitido = bool(monitorar[9])
 
-                zona_existente = next((z for z in zonas if z.id == zona_id), None)
+                    zona_existente = next((z for z in zonas if z.id == zona_id), None)
 
-                if zona_existente:
-                    if categoria_epi and categoria_epi not in zona_existente.epis_categoria:
-                        zona_existente.epis_categoria.append(categoria_epi)
+                    if zona_existente:
+                        if categoria_epi and categoria_epi not in zona_existente.epis_categoria:
+                            zona_existente.epis_categoria.append(categoria_epi)
 
-                else:
-                    x = int(monitorar[5])
-                    y = int(monitorar[6])
-                    largura = int(monitorar[7])
-                    altura = int(monitorar[8])
+                    else:
+                        x = int(monitorar[5])
+                        y = int(monitorar[6])
+                        largura = int(monitorar[7])
+                        altura = int(monitorar[8])
 
-                    regiao = [
-                        (x, y),
-                        (x + largura, y),
-                        (x + largura, y + altura),
-                        (x, y + altura)
-                    ]
+                        regiao = [
+                            (x, y),
+                            (x + largura, y),
+                            (x + largura, y + altura),
+                            (x, y + altura)
+                        ]
 
-                    # Adiciona a categoria apenas se ela existir (não for None)
-                    epis = [categoria_epi] if categoria_epi else []
+                        # Adiciona a categoria apenas se ela existir (não for None)
+                        epis = [categoria_epi] if categoria_epi else []
 
-                    zona = Zona(
-                        id=zona_id,
-                        nome=monitorar[4],
-                        id_camera=monitorar[1],
-                        id_monitorar=monitorar[0],
-                        x=x,
-                        y=y,
-                        largura=largura,
-                        altura=altura,
-                        permitido=permitido,
-                        epis_categoria=epis,
-                        regiao=regiao
-                    )
-                        
-                    zonas.append(zona)
+                        zona = Zona(
+                            id=zona_id,
+                            nome=monitorar[4],
+                            id_camera=monitorar[1],
+                            id_monitorar=monitorar[0],
+                            x=x,
+                            y=y,
+                            largura=largura,
+                            altura=altura,
+                            permitido=permitido,
+                            epis_categoria=epis,
+                            regiao=regiao
+                        )
 
-            return zonas
+                        zonas.append(zona)
+
+                return zonas

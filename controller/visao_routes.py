@@ -7,8 +7,8 @@ import os
 visao_bp = Blueprint('visao', __name__)
 
 
-def create_visao_bp(connection):
-    visao_service = VisaoService(connection)
+def create_visao_bp(connection, alertas_queue=None):
+    visao_service = VisaoService(connection, alertas_queue=alertas_queue)
     workers = {}
 
     @visao_bp.route('/video', defaults={'camera_id': 1}, methods=['GET'])
@@ -17,7 +17,7 @@ def create_visao_bp(connection):
     def video(camera_id=1):
         worker = workers.get(camera_id)
         if worker is None:
-            worker = VisionWorker(camera_id=camera_id)
+            worker = VisionWorker(camera_id=camera_id, alertas_queue=alertas_queue)
             workers[camera_id] = worker
             worker.start()
 
@@ -35,12 +35,12 @@ def create_visao_bp(connection):
 
         return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-    @visao_bp.route('/detections', methods=['GET'])
-    def detections():
-        if workers:
-            worker = next(reversed(workers.values()))
-            return jsonify(worker.get_last_results())
-        return jsonify(visao_service.get_last_results())
+    @visao_bp.route('/detections/<int:camera_id>', methods=['GET'])
+    def detections(camera_id):
+        worker = workers.get(camera_id)
+        if worker is None:
+            return jsonify([]), 404
+        return jsonify(worker.get_last_results())
 
     @visao_bp.route('/active-learning/toggle', methods=['POST'])
     def toggle_active_learning():

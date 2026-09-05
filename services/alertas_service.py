@@ -2,14 +2,16 @@ from repository.alertas_repository import AlertasRepository
 from services.usuario_service import UsuarioService
 
 from email.message import EmailMessage
+from datetime import datetime, timedelta
 import smtplib
 import os
 
 class AlertasService:
-    def __init__(self, connection):
+    def __init__(self, connection, alertas_queue=None):
         self.connection = connection
         self.alertas_repository = AlertasRepository(connection)
         self.usuario_service = UsuarioService(connection)
+        self.alertas_queue = alertas_queue
 
     def obter_alertas(self) -> list[dict] | None:
         alertas = self.alertas_repository.get_alertas()
@@ -104,32 +106,66 @@ class AlertasService:
         return self.alertas_repository.marcar_alerta_resolvido(id_alerta)
 
     def criar_alerta(self, id_monitorar: int, id_usuario: int | None, evento: str, severidade: int = 1) -> bool:
+        sucesso = self.alertas_repository.criar_alerta(id_monitorar, id_usuario, evento, severidade)
+
+        if not sucesso:
+            return False
+
+        alerta_dict = {
+            'id_monitorar': id_monitorar,
+            'id_usuario': id_usuario,
+            'evento': evento,
+            'severidade': severidade,
+        }
+
+        # Emite o alerta para os clientes conectados via WebSocket. Como a criação
+        # do alerta pode acontecer dentro do subprocesso do VisionWorker, o evento
+        # é colocado numa fila multiprocessing e um listener no processo principal
+        # (onde o SocketIO de fato roda) é quem repassa para socketio.emit(...).
+        if self.alertas_queue is not None:
+            try:
+                self.alertas_queue.put_nowait(alerta_dict)
+            except Exception:
+                pass
+
         if severidade == 3:
-            email = self.usuario_service.get_email_usuario_por_id(id_usuario)
-            if email:
+            self._enviar_email_alerta_critico(id_monitorar, id_usuario, evento, severidade)
 
-                email_address = os.getenv('EMAIL_ADDRESS')
-                token_senha = os.getenv('EMAIL_PASSWORD')
+        return True
 
-                if email_address and token_senha:
-                    msg = EmailMessage()
+    def _enviar_email_alerta_critico(self, id_monitorar: int, id_usuario: int | None, evento: str, severidade: int) -> None:
+        email = self.usuario_service.get_email_usuario_por_id(id_usuario)
 
-                    corpo_email = f"Alerta de severidade crítico, na zona de monitoramento {id_monitorar}!\n\nEvento: {evento}\nSeveridade: {severidade}\n\nPor favor, tome as medidas necessárias."
+        if not email:
+            return
 
-                    msg["Subject"] = "Alerta Crítico"
-                    msg["From"] = email_address
-                    msg["To"] = email
+        email_address = os.getenv('EMAIL_ADDRESS')
+        token_senha = os.getenv('EMAIL_PASSWORD')
 
-                    msg.set_content(corpo_email)
+        if not (email_address and token_senha):
+            return
 
-                    with smtplib.SMTP('smtp.gmail.com', 587) as server:
-                        server.starttls()
-                        server.login(email_address, token_senha)
-                        server.send_message(msg)
+        msg = EmailMessage()
 
-            # TODO: Adicionar a lógica para enviar os alertas para WebSocket
+        corpo_email = f"Alerta de severidade crítico, na zona de monitoramento {id_monitorar}!\n\nEvento: {evento}\nSeveridade: {severidade}\n\nPor favor, tome as medidas necessárias."
 
-        return self.alertas_repository.criar_alerta(id_monitorar, id_usuario, evento, severidade)
+        msg["Subject"] = "Alerta Crítico"
+        msg["From"] = email_address
+        msg["To"] = email
+
+        msg.set_content(corpo_email)
+
+        with smtplib.SMTP('smtp.gmail.com', 587) as server:
+            server.starttls()
+            server.login(email_address, token_senha)
+            server.send_message(msg)
 
     def deletar_alerta(self, id_alerta: int) -> bool:
         return self.alertas_repository.deletar_alerta(id_alerta)
+
+    def obter_contagem_por_tipo_epi(self) -> list[dict]:
+        return self.alertas_repository.get_contagem_por_tipo_epi()
+
+    def obter_contagem_por_dia(self, dias: int = 30) -> list[dict]:
+        desde = datetime.now() - timedelta(days=dias)
+        return self.alertas_repository.get_contagem_por_dia(desde)

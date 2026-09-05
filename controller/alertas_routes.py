@@ -1,9 +1,9 @@
 from services.alertas_service import AlertasService
 from flask import Blueprint, jsonify, request
 
-def create_alertas_bp(connection):
+def create_alertas_bp(connection, alertas_queue=None):
     alertas_bp = Blueprint('alertas', __name__)
-    alertas_service = AlertasService(connection)
+    alertas_service = AlertasService(connection, alertas_queue=alertas_queue)
 
     @alertas_bp.route('/alertas', methods=['GET'])
     def listar_alertas():
@@ -52,5 +52,14 @@ def create_alertas_bp(connection):
             return jsonify({'message': 'Alerta deletado com sucesso'}), 200
         else:
             return jsonify({'message': 'Falha ao deletar alerta'}), 400
+
+    @alertas_bp.route('/alertas/estatisticas/epi', methods=['GET'])
+    def estatisticas_por_epi():
+        return jsonify(alertas_service.obter_contagem_por_tipo_epi()), 200
+
+    @alertas_bp.route('/alertas/estatisticas/periodo', methods=['GET'])
+    def estatisticas_por_periodo():
+        dias = request.args.get('dias', default=30, type=int)
+        return jsonify(alertas_service.obter_contagem_por_dia(dias)), 200
 
     return alertas_bp

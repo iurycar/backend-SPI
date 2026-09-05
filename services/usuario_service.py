@@ -23,6 +23,9 @@ class UsuarioService:
         else:
             return None
 
+    def get_email_usuario_por_id(self, id_usuario: int) -> str | None:
+        return self.user_repository.get_email_usuario_por_id(id_usuario)
+
     def signup(self, email: str, password: str, nome: str, sobrenome: str, perfil: str, unidade: str = None, telefone: str = None):
         usuario_existente = self.user_repository.get_usuario_por_email(email)
 

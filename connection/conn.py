@@ -1,5 +1,6 @@
+from contextlib import contextmanager
 from dotenv import load_dotenv
-import psycopg2
+from psycopg2 import pool
 import os
 
 load_dotenv()
@@ -12,7 +13,12 @@ database = os.getenv('DB_NAME')
 
 class Connection:
     def __init__(self):
-        self.conn = psycopg2.connect(
+        min_conn = int(os.getenv('DB_POOL_MIN_CONN', 1))
+        max_conn = int(os.getenv('DB_POOL_MAX_CONN', 10))
+
+        self.pool = pool.ThreadedConnectionPool(
+            min_conn,
+            max_conn,
             host=host,
             port=port,
             user=user,
@@ -20,5 +26,19 @@ class Connection:
             database=database
         )
 
+    @contextmanager
     def get_connection(self):
-        return self.conn
+        """Empresta uma conexão do pool e a devolve ao final do bloco `with`.
+
+        Em caso de exceção, faz rollback na própria conexão antes de
+        devolvê-la ao pool, para nunca devolver uma transação abortada.
+        """
+        connection = self.pool.getconn()
+
+        try:
+            yield connection
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            self.pool.putconn(connection)

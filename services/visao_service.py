@@ -44,11 +44,11 @@ class VisaoService:
     }
 
 
-    def __init__(self, connection):
+    def __init__(self, connection, alertas_queue=None):
         self.connection = connection
         self.monitoramento_repository = MonitoramentoRepository(connection)
         self.setores_repository = SetoresRepository(connection)
-        self.alertas_service = AlertasService(connection)
+        self.alertas_service = AlertasService(connection, alertas_queue=alertas_queue)
         self.last_results = []
         self.cap = None
         self._alert_cache = {}
@@ -120,11 +120,6 @@ class VisaoService:
         """
         Retorna a lista de zonas de monitoramento para a câmera especificada.
         """
-        try:
-            self.connection.rollback()
-        except Exception:
-            pass
-
         zonas = self.monitoramento_repository.get_zonas_monitoradas_por_id_camera(id_camera)
 
         for zona in zonas:
@@ -253,7 +248,7 @@ class VisaoService:
                 b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n'
             )
 
-    def run_video_loop(self, camera_id: int = 1, frame_queue=None, last_results=None, stop_event=None):
+    def run_video_loop(self, camera_id: int = 1, last_results=None, stop_event=None):
         """Executa o loop de processamento em um processo separado."""
         self.ensure_models_loaded()
         zonas_configuradas = self.zonas_de_monitoramento(camera_id)
@@ -298,11 +293,11 @@ class VisaoService:
                 self.pose_estimation(frame, camera_id)
 
                 sucesso, buffer = cv2.imencode('.jpg', frame)
-                if sucesso and frame_queue is not None:
-                    try:
-                        frame_queue.put(buffer.tobytes(), block=False)
-                    except Exception:
-                        pass
+                if sucesso and last_results is not None:
+                    # Guarda sempre o último frame (em vez de enfileirar) para que
+                    # múltiplos viewers da mesma câmera leiam o mesmo frame mais
+                    # recente, sem competir entre si por um único item da fila.
+                    last_results['last_frame'] = buffer.tobytes()
         finally:
             if self.cap is not None:
                 self.cap.release()

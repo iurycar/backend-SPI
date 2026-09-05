@@ -1,7 +1,10 @@
 from dotenv import load_dotenv
 from datetime import timedelta
 from flask_cors import CORS
+from flask_socketio import SocketIO
 from flask import Flask
+import multiprocessing as mp
+import threading
 import os
 
 from controller.cameras_routes import create_cameras_bp
@@ -44,17 +47,39 @@ if DEV_INSECURE:
 else:
     CORS(app, supports_credentials=True)
 
-# Cria a classe conexão, para ser passada para os blueprints
+# SocketIO reaproveita a mesma política de origens da variável DEV_INSECURE já
+# usada pelo CORS acima. async_mode='threading' funciona com o servidor de
+# desenvolvimento do Werkzeug já usado por este projeto, sem exigir
+# eventlet/gevent — decisão a revisitar se o projeto for para produção.
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*" if DEV_INSECURE else None,
+    async_mode='threading',
+)
+
+# Cria a classe conexão (agora um pool), para ser passada para os blueprints
 conn = Connection()
 
-app.register_blueprint(create_cameras_bp(conn.get_connection()))
-app.register_blueprint(create_setores_bp(conn.get_connection()))
-app.register_blueprint(create_alertas_bp(conn.get_connection()))
-app.register_blueprint(create_zonas_bp(conn.get_connection()))
-app.register_blueprint(create_visao_bp(conn.get_connection()))
-app.register_blueprint(create_user_bp(conn.get_connection()))
-app.register_blueprint(create_epi_bp(conn.get_connection()))
+# Fila usada pelos processos do VisionWorker (um por câmera) para repassar
+# alertas recém-criados até o processo principal, onde o SocketIO de fato
+# roda. Ver AlertasService.criar_alerta.
+alertas_queue = mp.Queue()
+
+def _relay_alertas_para_websocket():
+    while True:
+        alerta_dict = alertas_queue.get()
+        socketio.emit('novo_alerta', alerta_dict)
+
+threading.Thread(target=_relay_alertas_para_websocket, daemon=True).start()
+
+app.register_blueprint(create_cameras_bp(conn))
+app.register_blueprint(create_setores_bp(conn))
+app.register_blueprint(create_alertas_bp(conn, alertas_queue=alertas_queue))
+app.register_blueprint(create_zonas_bp(conn))
+app.register_blueprint(create_visao_bp(conn, alertas_queue=alertas_queue))
+app.register_blueprint(create_user_bp(conn))
+app.register_blueprint(create_epi_bp(conn))
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    socketio.run(app, host='0.0.0.0', port=5000, debug=True, allow_unsafe_werkzeug=True)
