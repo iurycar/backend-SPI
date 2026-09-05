@@ -70,4 +70,9 @@ def create_cameras_bp(connection):
         else:
             return jsonify({'message': 'Falha ao deletar a câmera'}), 400
 
+    @cameras_bp.route('/cameras/status', methods=['GET'])
+    def listar_status_cameras():
+        cameras_status = cameras_service.listar_status_cameras()
+        return jsonify(cameras_status), 200
+
     return cameras_bp

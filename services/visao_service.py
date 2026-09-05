@@ -362,10 +362,16 @@ class VisaoService:
 
                 if not sucesso:
                     print(f"⚠️ Perda de sinal no stream da câmera {camera_id}. Reiniciando captura...")
+                    if last_results is not None:
+                        last_results['connected'] = False # Marca que o RTSP caiu
                     self.cap.release()
                     self.cap = None
                     time.sleep(2)
                     continue
+
+                if last_results is not None:
+                    last_results['connected'] = True # Marca que o RTSP está ativo
+                    last_results['last_frame_time'] = time.time()
 
                 detections, class_count = self.object_detection(frame, zonas_configuradas)
 

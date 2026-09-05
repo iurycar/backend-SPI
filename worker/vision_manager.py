@@ -50,3 +50,12 @@ def parar_vision_workers():
         worker.stop()
 
     workers.clear()
+
+
+def get_camera_status(camera_id: int) -> dict:
+    worker = workers.get(camera_id)
+
+    if not worker:
+        return 'Inativo'
+
+    return 'Ativo' if worker.is_online() else 'Desconectado'

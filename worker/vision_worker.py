@@ -68,3 +68,19 @@ class VisionWorker:
         if self.last_results is None:
             return []
         return self.last_results.get('detections', [])
+
+    def is_online(self) -> bool:
+        """
+            Retorna True se o processo estiver vivo e se recebeu um frame nos últimos 5 segundos.
+        """
+
+        if not self.process or not self.process.is_alive():
+            return False
+
+        if self.last_results is None:
+            return False
+
+        connected = self.last_results.get('connected', False)
+        last_frame_time = self.last_results.get('last_frame_time', 0)
+
+        return connected and (time.time() - last_frame_time) < 5
