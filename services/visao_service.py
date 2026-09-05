@@ -490,13 +490,14 @@ class VisaoService:
             return # Já existe um alerta recente para este evento e track_id
 
         setor = self.setores_repository.get_setor_por_id_zona(monitoramento.id)
+        responsaveis = self.setores_repository.get_responsaveis_por_setor(setor.id)
 
-        if setor:
-            responsaveis = self.setores_repository.get_responsaveis_por_setor(setor.id)
-
-            if responsaveis:
-                for responsavel in responsaveis:
-                    self.alertas_service.criar_alerta(monitoramento, responsavel, evento, severidade=severidade)
+        self.alertas_service.registrar_alertas_com_notificacao_unica(
+            monitoramento=monitoramento, 
+            responsaveis=responsaveis,
+            evento=evento,
+            severidade=severidade
+        )
 
     def avaliar_postura(self, metodo, **kargs):
         """
@@ -752,18 +753,28 @@ class VisaoService:
         # Evita alertas duplicados para o mesmo track_id e motivo dentro de um período de 30 segundos
         if not self.redis_client.set(cache_chave, "1", ex=30, nx=True):
             return
+
+        zonas = self.zonas_de_monitoramento(camera_id)
+
+        if not zonas:
+            return
+
+        zona_alvo = zonas[0]    
         
         setor = self.setores_repository.get_setor_por_id_camera(camera_id)
         
         if setor:
             responsaveis = self.setores_repository.get_responsaveis_por_setor(setor.id)
+            sucesso = self.alertas_service.criar_alerta(
+                monitoramento=zona_alvo,
+                id_usuario=responsaveis[0] if responsaveis else None,
+                evento = motivo, 
+                severidade=severidade,
+                destinatarios=responsaveis
+            )
 
-            if responsaveis:  
-                for responsavel in responsaveis:
-                    sucesso = self.alertas_service.criar_alerta(camera_id, responsavel, evento = motivo, severidade=severidade)
-
-                    if sucesso:
-                        print(f"⚠️ Má postura detectada - ID: {track_id}")
+            if sucesso:
+                print(f"⚠️ Má postura detectada - ID: {track_id}")
 
 
     def desenhar_caixa_delimitadora(self, frame, box, label, color=(0, 255, 0)):

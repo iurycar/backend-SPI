@@ -67,7 +67,7 @@ def create_alertas_bp(connection):
 
     @alertas_bp.route('/alertas/estatisticas/periodo', methods=['GET'])
     def estatisticas_alertas_por_periodo():
-        periodo = request.args.get('periodo', default='30', type=str)
+        periodo = request.args.get('periodo', default=30, type=str)
 
         estatisticas = alertas_service.obter_contagem_por_periodo(periodo)
 

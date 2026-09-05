@@ -150,7 +150,7 @@ class AlertasRepository:
 
             return cursor.rowcount > 0
 
-    def get_contangem_por_tipo_epi(self) -> list[dict]:
+    def get_contagem_por_tipo_epi(self) -> list[dict]:
         with self.conn.cursor() as cursor:
             query = """
                 SELECT COALESCE(e.categoria, 'Sem Categoria') AS categoria, COUNT(*) AS total
@@ -174,7 +174,7 @@ class AlertasRepository:
 
             return valores
 
-    def get_contagem_por_dia(self, desde) -> list[dict]:
+    def get_contagem_por_periodo(self, desde) -> list[dict]:
         with self.conn.cursor() as cursor:
             query = """
                 SELECT DATE(a.data_hora) AS dia, COUNT(*) AS total
