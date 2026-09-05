@@ -84,6 +84,12 @@ class ZonasService:
 
         return zonas_lista
 
+    def obter_id_camera_por_zona(self, zona_id: int) -> int | None:
+        zona = self.zonas_repository.get_zona_por_id(zona_id)
+        if zona:
+            return zona.id_camera
+        return None
+
     def registrar_zona(self, data: dict) -> dict | None:
         try:
             zona_dto = ZonaDTO.from_dict(data)

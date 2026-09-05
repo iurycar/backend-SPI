@@ -42,3 +42,23 @@ def get_camera_status(camera_id: int) -> dict:
         return 'Inativo'
 
     return 'Ativo' if worker.is_online() else 'Desconectado'
+
+def notificar_atualizacao_zonas(camera_id: int):
+    """
+    Notifica o worker da câmera especificada para recarregar as zonas de monitoramento.
+    """
+    worker = workers.get(camera_id)
+
+    if worker:
+        worker.reload_zones()
+
+def notificar_desligamento_camera(camera_id: int):
+    """
+    Notifica o worker da câmera especificada para desligar.
+    """
+    worker = workers.get(camera_id)
+
+    if worker:
+        worker.stop()
+        del workers[camera_id]
+        print(f"🛑 Worker para a câmera {camera_id} foi desligado.")
