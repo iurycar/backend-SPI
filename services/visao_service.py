@@ -17,6 +17,8 @@ from services.alertas_service import AlertasService
 from models.alertas import Alerta
 from models.zonas import Zona
 
+from tasks.alarme_task import enviar_comando
+
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, 'assets', 'modelo', 'treinamento', 'weights', 'best.pt')
 MODEL_PATH_POSE = os.path.join(BASE_DIR, 'assets', 'modelo', 'treinamento', 'weights', 'yolov8s-pose.pt')
@@ -140,7 +142,27 @@ class VisaoService:
         return zonas
 
 
-    def dentro_da_zona(self, box: tuple, regiao: list[tuple[int, int]]) -> bool:
+    def regiao_para_pixels(self, regiao, img_largura: int, img_altura: int) -> list[tuple[int, int]]:
+        """
+        Converte as coordenadas da região (seja normalizada 0.0..1.0 ou em pixels) para tuplas de inteiros de pixels na imagem.
+        """
+        if not regiao:
+            return []
+
+        # Verifica se as coordenadas na região estão normalizadas (<= 1.0)
+        max_val = max(max(abs(float(p[0])), abs(float(p[1]))) for p in regiao)
+        if max_val <= 1.0:
+            return [
+                (int(float(p[0]) * img_largura), int(float(p[1]) * img_altura))
+                for p in regiao
+            ]
+        else:
+            return [
+                (int(float(p[0])), int(float(p[1])))
+                for p in regiao
+            ]
+
+    def dentro_da_zona(self, box: tuple, regiao: list[tuple[int, int]], img_largura: int = 1920, img_altura: int = 1080) -> bool:
         """
         Verifica se o centro da caixa delimitadora (box) está dentro do polígono definido por 'regiao'.
         """
@@ -148,7 +170,8 @@ class VisaoService:
         cx = int((x1 + x2) / 2)
         cy = int((y1 + y2) / 2)
 
-        pts = np.array(regiao, np.int32)
+        pts_pixels = self.regiao_para_pixels(regiao, img_largura, img_altura)
+        pts = np.array(pts_pixels, np.int32)
         return cv2.pointPolygonTest(pts, (cx, cy), False) >= 0
 
 
@@ -171,6 +194,8 @@ class VisaoService:
         """
         Converte uma região poligonal em uma caixa delimitadora (bounding box) representada por (x_min, y_min, x_max, y_max).
         """
+        if not regiao:
+            return 0, 0, 0, 0
         xs = [p[0] for p in regiao]
         ys = [p[1] for p in regiao]
         return min(xs), min(ys), max(xs), max(ys)
@@ -180,10 +205,21 @@ class VisaoService:
         """
         Desenha a zona no frame com base na região fornecida.
         """
+        if not regiao:
+            return
+
+        img_altura, img_largura = frame.shape[:2]
+        pts_pixels = self.regiao_para_pixels(regiao, img_largura, img_altura)
+        if not pts_pixels:
+            return
+
         color = self.CORES.get('azul', (255, 0, 0))
-        pts = np.array(regiao, np.int32)
+        pts = np.array(pts_pixels, np.int32)
         cv2.polylines(frame, [pts], True, color, 2)
-        cv2.putText(frame, f"Zona: {nome}", (regiao[0][0], regiao[0][1] - 10),
+
+        org_x = int(pts_pixels[0][0])
+        org_y = max(15, int(pts_pixels[0][1]) - 10)
+        cv2.putText(frame, f"Zona: {nome}", (org_x, org_y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
 
@@ -417,8 +453,8 @@ class VisaoService:
 
                 # Itera sobre as zonas configuradas para verificar se o objeto está dentro de alguma delas
                 for monitoramento in zonas_configuradas:
-
-                    if self.caixas_intersectam(xyxy, self.regiao_para_caixa(monitoramento.regiao)):
+                    regiao_px = self.regiao_para_pixels(monitoramento.regiao, img_largura, img_altura)
+                    if self.caixas_intersectam(xyxy, self.regiao_para_caixa(regiao_px)):
 
                         # Verifica se o objeto é requisitado na zona
                         if self.zona_requer_classe(monitoramento.epis_categoria, self.classe_epi_por_label(label_name), monitoramento.permitido):
@@ -498,6 +534,13 @@ class VisaoService:
             evento=evento,
             severidade=severidade
         )
+
+        alarme = self.monitoramento_repository.get_alarme_por_id_monitorar(monitoramento.id_monitorar)
+
+        if not alarme:
+            return
+
+        enviar_comando(comando="DISPARAR", endereco_esp32=alarme['endereco'])
 
     def avaliar_postura(self, metodo, **kargs):
         """

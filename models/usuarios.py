@@ -9,7 +9,6 @@ class Usuario:
     email: str
     password: str
     perfil: str
-    admin: bool = False
     unidade: str | None = None
     telefone: str | None = None
     ativo: bool = True
@@ -39,7 +38,7 @@ class Usuario:
         return self.perfil
 
     def is_admin(self) -> bool:
-        return self.admin
+        return self.perfil.lower() in ("admin", "administrador")
 
     def get_unidade(self) -> str | None:
         return self.unidade

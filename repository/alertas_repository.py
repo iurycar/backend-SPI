@@ -6,7 +6,7 @@ class AlertasRepository:
 
     def get_alertas(self) -> list[Alerta]:
         with self.conn.cursor() as cursor:
-            query = "SELECT a.*, m.id_zona, m.id_camera, m.id_epi FROM alertas a JOIN monitorar m ON m.id_monitorar = a.id_monitorar;"
+            query = "SELECT a.id_alerta, a.resolvido, a.data_hora, a.id_monitorar, a.id_usuario, a.evento, a.severidade, m.id_zona, z.id_camera, m.id_epi FROM alertas a JOIN monitorar m ON m.id_monitorar = a.id_monitorar JOIN zonas z ON m.id_zona = z.id_zona;"
             cursor.execute(query)
             alertas = cursor.fetchall()
 
@@ -17,7 +17,7 @@ class AlertasRepository:
                     alertas_lista.append(Alerta(
                         id=alerta[0],
                         resolvido=alerta[1],
-                        data_hora=alerta[2].strftime("%Y-%m-%d %H:%M:%S"),
+                        data_hora=alerta[2].strftime("%Y-%m-%d %H:%M:%S") if alerta[2] else "",
                         id_monitorar=alerta[3],
                         id_usuario=alerta[4],
                         evento=alerta[5],
@@ -31,7 +31,7 @@ class AlertasRepository:
 
     def get_alertas_por_id_camera(self, id_camera: int) -> list[Alerta]:
         with self.conn.cursor() as cursor:
-            query = "SELECT a.*, m.id_zona, m.id_camera, m.id_epi FROM alertas a JOIN monitorar m ON m.id_monitorar = a.id_monitorar WHERE m.id_camera = %s;"
+            query = "SELECT a.id_alerta, a.resolvido, a.data_hora, a.id_monitorar, a.id_usuario, a.evento, a.severidade, m.id_zona, z.id_camera, m.id_epi FROM alertas a JOIN monitorar m ON m.id_monitorar = a.id_monitorar JOIN zonas z ON m.id_zona = z.id_zona WHERE z.id_camera = %s;"
             cursor.execute(query, (id_camera,))
             alertas = cursor.fetchall()
 
@@ -42,7 +42,7 @@ class AlertasRepository:
                     alertas_lista.append(Alerta(
                         id=alerta[0],
                         resolvido=alerta[1],
-                        data_hora=alerta[2].strftime("%Y-%m-%d %H:%M:%S"),
+                        data_hora=alerta[2].strftime("%Y-%m-%d %H:%M:%S") if alerta[2] else "",
                         id_monitorar=alerta[3],
                         id_usuario=alerta[4],
                         evento=alerta[5],
@@ -56,7 +56,7 @@ class AlertasRepository:
 
     def get_alertas_por_id_zona(self, id_zona: int) -> list[Alerta]:
         with self.conn.cursor() as cursor:
-            query = "SELECT a.*, m.id_zona, m.id_camera, m.id_epi FROM alertas a JOIN monitorar m ON m.id_monitorar = a.id_monitorar WHERE m.id_zona = %s;"
+            query = "SELECT a.id_alerta, a.resolvido, a.data_hora, a.id_monitorar, a.id_usuario, a.evento, a.severidade, m.id_zona, z.id_camera, m.id_epi FROM alertas a JOIN monitorar m ON m.id_monitorar = a.id_monitorar JOIN zonas z ON m.id_zona = z.id_zona WHERE m.id_zona = %s;"
             cursor.execute(query, (id_zona,))
             alertas = cursor.fetchall()
 
@@ -67,7 +67,7 @@ class AlertasRepository:
                     alertas_lista.append(Alerta(
                         id=alerta[0],
                         resolvido=alerta[1],
-                        data_hora=alerta[2].strftime("%Y-%m-%d %H:%M:%S"),
+                        data_hora=alerta[2].strftime("%Y-%m-%d %H:%M:%S") if alerta[2] else "",
                         id_monitorar=alerta[3],
                         id_usuario=alerta[4],
                         evento=alerta[5],
@@ -81,7 +81,7 @@ class AlertasRepository:
 
     def get_alerta_por_id(self, id_alerta: int) -> Alerta | None:
         with self.conn.cursor() as cursor:
-            query = "SELECT a.*, m.id_zona, m.id_camera, m.id_epi FROM alertas a JOIN monitorar m ON m.id_monitorar = a.id_monitorar WHERE a.id_alerta = %s;"
+            query = "SELECT a.id_alerta, a.resolvido, a.data_hora, a.id_monitorar, a.id_usuario, a.evento, a.severidade, m.id_zona, z.id_camera, m.id_epi FROM alertas a JOIN monitorar m ON m.id_monitorar = a.id_monitorar JOIN zonas z ON m.id_zona = z.id_zona WHERE a.id_alerta = %s;"
             cursor.execute(query, (id_alerta,))
             alerta = cursor.fetchone()
 
@@ -89,7 +89,7 @@ class AlertasRepository:
                 return Alerta(
                     id=alerta[0],
                     resolvido=alerta[1],
-                    data_hora=alerta[2].strftime("%Y-%m-%d %H:%M:%S"),
+                    data_hora=alerta[2].strftime("%Y-%m-%d %H:%M:%S") if alerta[2] else "",
                     id_monitorar=alerta[3],
                     id_usuario=alerta[4],
                     evento=alerta[5],
@@ -103,7 +103,7 @@ class AlertasRepository:
             
     def get_alertas_por_id_usuario(self, id_usuario: int) -> list[Alerta]:
         with self.conn.cursor() as cursor:
-            query = "SELECT a.*, m.id_zona, m.id_camera, m.id_epi FROM alertas a JOIN monitorar m ON m.id_monitorar = a.id_monitorar WHERE a.id_usuario = %s;"
+            query = "SELECT a.id_alerta, a.resolvido, a.data_hora, a.id_monitorar, a.id_usuario, a.evento, a.severidade, m.id_zona, z.id_camera, m.id_epi FROM alertas a JOIN monitorar m ON m.id_monitorar = a.id_monitorar JOIN zonas z ON m.id_zona = z.id_zona WHERE a.id_usuario = %s;"
             cursor.execute(query, (id_usuario,))
             alertas = cursor.fetchall()
 
@@ -114,7 +114,7 @@ class AlertasRepository:
                     alertas_lista.append(Alerta(
                         id=alerta[0],
                         resolvido=alerta[1],
-                        data=alerta[2].strftime("%Y-%m-%d %H:%M:%S"),
+                        data_hora=alerta[2].strftime("%Y-%m-%d %H:%M:%S") if alerta[2] else "",
                         id_monitorar=alerta[3],
                         id_usuario=alerta[4],
                         evento=alerta[5],
@@ -196,3 +196,18 @@ class AlertasRepository:
                 })
 
             return valores
+
+    def get_monitoramento_por_id_alerta(self, id_alerta: int) -> dict | None:
+        with self.conn.cursor() as cursor:
+            query = "SELECT m.id_monitorar, m.id_zona, m.id_epi FROM monitorar m JOIN alertas a ON m.id_monitorar = a.id_monitorar WHERE a.id_alerta = %s;"
+            cursor.execute(query, (id_alerta,))
+            monitoramento = cursor.fetchone()
+
+            if monitoramento:
+                return {
+                    'id_monitorar': monitoramento[0],
+                    'id_zona': monitoramento[1],
+                    'id_epi': monitoramento[2]
+                }
+            else:
+                return None

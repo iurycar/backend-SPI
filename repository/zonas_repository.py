@@ -17,10 +17,10 @@ class ZonasRepository:
                     zonas_lista.append(Zona(
                         id=zona[0],
                         nome=zona[1],
-                        x=zona[2],
-                        y=zona[3],
-                        largura=zona[4],
-                        altura=zona[5],
+                        x=float(zona[2]),
+                        y=float(zona[3]),
+                        largura=float(zona[4]),
+                        altura=float(zona[5]),
                         permitido=zona[6],
                         id_camera=zona[7]
                     ))
@@ -38,10 +38,10 @@ class ZonasRepository:
                 return Zona(
                     id=zona[0],
                     nome=zona[1],
-                    x=zona[2],
-                    y=zona[3],
-                    largura=zona[4],
-                    altura=zona[5],
+                    x=float(zona[2]),
+                    y=float(zona[3]),
+                    largura=float(zona[4]),
+                    altura=float(zona[5]),
                     permitido=zona[6],
                     id_camera=zona[7]
                 )
@@ -61,10 +61,10 @@ class ZonasRepository:
                     zonas_lista.append(Zona(
                         id=zona[0],
                         nome=zona[1],
-                        x=zona[2],
-                        y=zona[3],
-                        largura=zona[4],
-                        altura=zona[5],
+                        x=float(zona[2]),
+                        y=float(zona[3]),
+                        largura=float(zona[4]),
+                        altura=float(zona[5]),
                         permitido=zona[6],
                         id_camera=zona[7]
                     ))
@@ -73,24 +73,24 @@ class ZonasRepository:
             
             return None
 
-    def registrar_zona(self, nome: str | None, id_camera: int, x: int = 0, y: int = 0, largura: int = 1920, altura: int = 1080, permitido: bool = True) -> Zona | None:
+    def registrar_zona(self, nome: str | None, id_camera: int, x: float = 0.0, y: float = 0.0, largura: float = 1.0, altura: float = 1.0, permitido: bool = True) -> Zona | None:
         with self.conn.cursor() as cursor:
             try:
                 cursor.execute(
                     "INSERT INTO zonas (nome, x, y, largura, altura, id_camera, permitido) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING *",
                     (nome, x, y, largura, altura, id_camera, permitido)
                 )
+                self.conn.commit()
                 zona = cursor.fetchone()
-                cursor.execute("COMMIT")
 
                 if zona:
                     return Zona(
                         id=zona[0],
                         nome=zona[1],
-                        x=zona[2],
-                        y=zona[3],
-                        largura=zona[4],
-                        altura=zona[5],
+                        x=float(zona[2]),
+                        y=float(zona[3]),
+                        largura=float(zona[4]),
+                        altura=float(zona[5]),
                         permitido=zona[6],
                         id_camera=zona[7]
                     )
@@ -100,7 +100,7 @@ class ZonasRepository:
 
         return None
 
-    def atualizar_zona(self, zona_id: int, nome: str | None, id_camera: int, x: int = 0, y: int = 0, largura: int = 1920, altura: int = 1080, permitido: bool = True) -> Zona | None:
+    def atualizar_zona(self, zona_id: int, nome: str | None, id_camera: int, x: float = 0.0, y: float = 0.0, largura: float = 1.0, altura: float = 1.0, permitido: bool = True) -> Zona | None:
         with self.conn.cursor() as cursor:
             try:
                 cursor.execute(
@@ -114,10 +114,10 @@ class ZonasRepository:
                     return Zona(
                         id=zona[0],
                         nome=zona[1],
-                        x=zona[2],
-                        y=zona[3],
-                        largura=zona[4],
-                        altura=zona[5],
+                        x=float(zona[2]),
+                        y=float(zona[3]),
+                        largura=float(zona[4]),
+                        altura=float(zona[5]),
                         permitido=zona[6],
                         id_camera=zona[7]
                     )

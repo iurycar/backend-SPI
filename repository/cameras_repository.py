@@ -15,8 +15,9 @@ class CamerasRepository:
                 for camera in cameras:
                     cameras_lista.append(Camera(
                         id=camera[0],
-                        ip=camera[1],
-                        id_setor=camera[2]
+                        nome=camera[1],
+                        ip=camera[2],
+                        id_setor=camera[3]
                     ))
 
                 return cameras_lista
@@ -31,8 +32,9 @@ class CamerasRepository:
             if camera:
                 return Camera(
                     id=camera[0],
-                    ip=camera[1],
-                    id_setor=camera[2]
+                    nome=camera[1],
+                    ip=camera[2],
+                    id_setor=camera[3]
                 )
 
             return None
@@ -48,29 +50,37 @@ class CamerasRepository:
                 for camera in cameras:
                     cameras_lista.append(Camera(
                         id=camera[0],
-                        ip=camera[1],
-                        id_setor=camera[2]
+                        nome=camera[1],
+                        ip=camera[2],
+                        id_setor=camera[3]
                     ))
 
                 return cameras_lista
 
             return None
 
-    def registrar_camera(self, ip: str, id_setor: int) -> Camera | None:
+    def registrar_camera(self, ip: str, id_setor: int, nome: str | None = None) -> Camera | None:
         with self.conn.cursor() as cursor:
             try:
-                cursor.execute(
-                    "INSERT INTO cameras (ip, id_setor) VALUES (%s, %s) RETURNING *",
-                    (ip, id_setor)
-                )
+                if nome is not None:
+                    cursor.execute(
+                        "INSERT INTO cameras (nome, ip, id_setor) VALUES (%s, %s, %s) RETURNING *",
+                        (nome, ip, id_setor)
+                    )
+                else:
+                    cursor.execute(
+                        "INSERT INTO cameras (ip, id_setor) VALUES (%s, %s) RETURNING *",
+                        (ip, id_setor)
+                    )
                 self.conn.commit()
                 camera = cursor.fetchone()
 
                 if camera:
                     return Camera(
                         id=camera[0],
-                        ip=camera[1],
-                        id_setor=camera[2]
+                        nome=camera[1],
+                        ip=camera[2],
+                        id_setor=camera[3]
                     )
 
             except Exception as e:
@@ -79,21 +89,28 @@ class CamerasRepository:
 
         return None
 
-    def atualizar_camera(self, camera_id: int, ip: str, id_setor: int) -> Camera | None:
+    def atualizar_camera(self, camera_id: int, ip: str, id_setor: int, nome: str | None = None) -> Camera | None:
         with self.conn.cursor() as cursor:
             try:
-                cursor.execute(
-                    "UPDATE cameras SET ip = %s, id_setor = %s WHERE id_camera = %s RETURNING *",
-                    (ip, id_setor, camera_id)
-                )
+                if nome is not None:
+                    cursor.execute(
+                        "UPDATE cameras SET nome = %s, ip = %s, id_setor = %s WHERE id_camera = %s RETURNING *",
+                        (nome, ip, id_setor, camera_id)
+                    )
+                else:
+                    cursor.execute(
+                        "UPDATE cameras SET ip = %s, id_setor = %s WHERE id_camera = %s RETURNING *",
+                        (ip, id_setor, camera_id)
+                    )
                 self.conn.commit()
                 camera = cursor.fetchone()
 
                 if camera:
                     return Camera(
                         id=camera[0],
-                        ip=camera[1],
-                        id_setor=camera[2]
+                        nome=camera[1],
+                        ip=camera[2],
+                        id_setor=camera[3]
                     )
 
             except Exception as e:

@@ -5,25 +5,21 @@ class UsuarioRepository:
         self.conn = connection
     
     def get_usuario_por_email(self, email: str) -> Usuario | None:
-        busca = "SELECT * FROM usuarios WHERE email = %s"
+        busca = "SELECT id_usuario, nome, sobrenome, email, senha, perfil, unidade, telefone, ativo, acesso FROM usuarios WHERE email = %s"
 
         with self.conn.cursor() as cursor:
             cursor.execute(busca, (email,))
             resultado = cursor.fetchone()
 
-            print(f"Resultado da consulta para email '{email}': {resultado}")
-
             if resultado:
-                print(f"Resultado da consulta para email '{email}': {resultado}")
+                id_usuario, nome, sobrenome, email, senha, perfil, unidade, telefone, ativo, acesso = resultado
 
-                id, nome, sobrenome, email, password, perfil, admin, unidade, telefone, ativo, acesso = resultado
-
-                return Usuario(id, nome, sobrenome, email, password, perfil, admin, unidade, telefone, ativo, acesso)
+                return Usuario(id_usuario, nome, sobrenome, email, senha, perfil, unidade, telefone, ativo, acesso)
             else:
                 return None
         
-    def criar_usuario(self, email: str, hashed_password: str, nome: str, sobrenome: str, perfil: str, unidade: str = None, telefone: str = None) -> Usuario:
-        insert = "INSERT INTO usuarios (email, password, nome, sobrenome, perfil, unidade, telefone) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id"
+    def criar_usuario(self, email: str, hashed_password: str, nome: str, sobrenome: str, perfil: str, unidade: str = None, telefone: str = None) -> Usuario | None:
+        insert = "INSERT INTO usuarios (email, senha, nome, sobrenome, perfil, unidade, telefone) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id_usuario"
 
         try:
             with self.conn.cursor() as cursor:
@@ -35,7 +31,7 @@ class UsuarioRepository:
 
                 self.conn.commit()
 
-            return Usuario(novo_id, nome, sobrenome, email, hashed_password, perfil, False) 
+            return Usuario(id=novo_id, nome=nome, sobrenome=sobrenome, email=email, password=hashed_password, perfil=perfil, unidade=unidade, telefone=telefone) 
 
         except Exception as e:
             print(f"Erro ao criar usuário: {e}")
