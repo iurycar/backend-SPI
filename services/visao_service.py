@@ -13,6 +13,7 @@ import os
 
 from repository.monitoramento_repository import MonitoramentoRepository
 from repository.setores_repository import SetoresRepository
+from services.cameras_service import CamerasService
 from services.alertas_service import AlertasService
 from models.alertas import Alerta
 from models.zonas import Zona
@@ -47,12 +48,24 @@ class VisaoService:
         'branco': (255, 255, 255),
     }
 
+    # Paleta de cores mais moderna em BGR
+    CORES_HUD = {
+        'primaria': (255, 210, 0),     # Ciano
+        'alerta': (0, 140, 255),       # Laranja/Âmbar
+        'perigo': (70, 70, 255),       # Vermelho Coral
+        'sucesso': (100, 230, 0),      # Verde Lima
+        'escuro': (25, 25, 25),        # Quase preto para fundos
+        'branco': (240, 240, 240),
+        'cinza': (140, 140, 140)
+    }
+
 
     def __init__(self, connection):
         self.connection = connection
         self.monitoramento_repository = MonitoramentoRepository(connection)
         self.setores_repository = SetoresRepository(connection)
         self.alertas_service = AlertasService(connection)
+        self.cameras_service = CamerasService(connection)
 
         self.redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 
@@ -76,7 +89,48 @@ class VisaoService:
         if self.modelo_pose is None:
             self.modelo_pose = YOLO(MODEL_PATH_POSE)
 
-    def open_camera(self):
+    def open_camera(self, camera_id: int):
+        """
+            Abre o stream de vídeo RTSP da câmera com ID especificado
+            Se não encontrar RTSP ou falhar, faz fallback para webcam local.
+        """
+        # RTSP = Real Time Streaming Protocol, usado para transmitir vídeo em tempo real de câmeras IP.
+        # FFmpeg = Biblioteca de código aberto para processar vídeo e áudio, usada aqui para capturar o stream RTSP.
+        # TCP = Transmission Control Protocol, garante entrega confiável de dados, usado aqui para reduzir perda de frames no stream RTSP.
+
+        rtsp_url = None
+
+        try:
+            # Busca os dados da câmera por ID
+            camera = self.cameras_service.obter_camera_por_id(camera_id)
+
+            if camera:
+                # Pega o RTSP da câmera
+                rtsp_url = camera.get('ip') if isinstance(camera, dict) else getattr(camera, 'ip', None)
+
+        except Exception as e:
+            print(f"❌ Erro ao obter RTSP da câmera {camera_id}: {e}")
+
+
+        # Se tiver URL RTSP, abre via FFMPEG forçando TCP
+        if rtsp_url:
+            print(f"🔗 Conectando ao RTSP da câmera {camera_id}: {rtsp_url}")
+
+            # Define flags do FFmpeg via variáveis de ambiente para reduzir latência
+            os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = "rtsp_transport;tcp|buffer_size;1024000|max_delay;500000"
+
+            cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
+
+            # Limita buffer interno do OpenCV para evitar delay acumulado
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+            if cap.isOpened():
+                self.cap = cap
+                return self.cap
+            else:
+                print(f"❌ Falha ao abrir RTSP da câmera {camera_id}. Tentando fallback para webcam local.")
+
+        # Fallback para webcam local
         cam_idx, backend = self.find_camera()
 
         if cam_idx is None:
@@ -106,7 +160,8 @@ class VisaoService:
         """
         Encontra uma câmera disponível no sistema.
         """
-
+        
+        cameras = self.cameras_service.listar_cameras()
         backend = self.get_plataform_camera()
 
         for index in range(5):
@@ -162,17 +217,30 @@ class VisaoService:
                 for p in regiao
             ]
 
-    def dentro_da_zona(self, box: tuple, regiao: list[tuple[int, int]], img_largura: int = 1920, img_altura: int = 1080) -> bool:
-        """
-        Verifica se o centro da caixa delimitadora (box) está dentro do polígono definido por 'regiao'.
-        """
-        x1, y1, x2, y2 = box
-        cx = int((x1 + x2) / 2)
-        cy = int((y1 + y2) / 2)
+    def normalizar_regiao(self, regiao, img_largura: int, img_altura: int) -> list[list[float]]:
+        """Garante que todos os pontos estão normalizados entre 0.0 e 1.0"""
 
-        pts_pixels = self.regiao_para_pixels(regiao, img_largura, img_altura)
-        pts = np.array(pts_pixels, np.int32)
-        return cv2.pointPolygonTest(pts, (cx, cy), False) >= 0
+        if not regiao:
+            return []
+
+        # Verifica se as coordenadas na região estão normalizadas (<= 1.0)
+        max_val = max(
+                    max(
+                        abs(float(ponto[0])), 
+                        abs(float(ponto[1]))
+                    ) 
+                for ponto in regiao
+                )
+
+        # Se todas as coordenadas já estão normalizadas, retorna a região como está
+        if max_val <= 1.0:
+            return [[float(ponto[0]), float(ponto[1])] for ponto in regiao]
+
+        # Caso contrário, normaliza as coordenadas dividindo pelos tamanhos da imagem
+        return [
+            [round(float(ponto[0]) / img_largura, 4), round(float(ponto[1]) / img_altura, 4)]
+            for ponto in regiao
+        ] 
 
 
     def caixas_intersectam(self, caixa1: tuple, caixa2: tuple) -> bool:
@@ -201,28 +269,6 @@ class VisaoService:
         return min(xs), min(ys), max(xs), max(ys)
 
 
-    def desenhar_zona(self, frame, regiao, nome):
-        """
-        Desenha a zona no frame com base na região fornecida.
-        """
-        if not regiao:
-            return
-
-        img_altura, img_largura = frame.shape[:2]
-        pts_pixels = self.regiao_para_pixels(regiao, img_largura, img_altura)
-        if not pts_pixels:
-            return
-
-        color = self.CORES.get('azul', (255, 0, 0))
-        pts = np.array(pts_pixels, np.int32)
-        cv2.polylines(frame, [pts], True, color, 2)
-
-        org_x = int(pts_pixels[0][0])
-        org_y = max(15, int(pts_pixels[0][1]) - 10)
-        cv2.putText(frame, f"Zona: {nome}", (org_x, org_y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-
-
     def classe_epi_por_label(self, label: str) -> str | None:
         if not label:
             return None
@@ -245,85 +291,49 @@ class VisaoService:
         return False
 
 
-    def generate_frames(self, camera_id: int = 1):
-        """
-        Gera frames da câmera especificada, aplicando detecção de objetos e verificando se eles estão dentro das zonas configuradas.
-        """
+    def run_video_loop(self, 
+                       camera_id: int = 1, 
+                       frame_queue=None, 
+                       last_results=None, 
+                       stop_event=None, 
+                       reload_zones_event=None
+        ):
+
+        """Executa o loop de processamento em um processo separado com reconexão automática."""
         self.ensure_models_loaded()
         zonas_configuradas = self.zonas_de_monitoramento(camera_id)
 
-        if not zonas_configuradas:
-            print(f"❌ Nenhuma zona configurada para a câmera com ID {camera_id}.")
-            return
-
-        if self.cap is None:
-            self.open_camera()
-
-        if self.cap is None or not self.cap.isOpened():
-            return
-
-        while self.cap.isOpened():
-            sucesso, frame = self.cap.read()
-
-            if not sucesso:
-                break
-
-            detections, class_count = self.object_detection(frame, zonas_configuradas)
-
-            for monitoramento in zonas_configuradas:
-                nome = self.remover_acentos(monitoramento.nome)
-                self.desenhar_zona(frame, monitoramento.regiao, nome)
-
-            start_y = 30
-            for idx, (cls_name, count) in enumerate(class_count.items()):
-                cv2.putText(frame, f"{cls_name}: {count}", (10, start_y + idx * 30),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, self.CORES.get('branco', (255, 255, 255)), 2)
-
-            self.last_results = detections
-            self.pose_estimation(frame, camera_id)
-
-            sucesso, buffer = cv2.imencode('.jpg', frame)
-            if not sucesso:
-                continue
-
-            frame_bytes = buffer.tobytes()
-
-            yield (
-                b'--frame\r\n'
-                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n'
-            )
-
-    def run_video_loop(self, camera_id: int = 1, frame_queue=None, last_results=None, stop_event=None):
-        """Executa o loop de processamento em um processo separado."""
-        self.ensure_models_loaded()
-        zonas_configuradas = self.zonas_de_monitoramento(camera_id)
-
-        if not zonas_configuradas:
-            if last_results is not None:
-                last_results['detections'] = []
-                last_results['class_count'] = {}
-            return
-
-        self.cap = self.open_camera()
-
-        if self.cap is None or not self.cap.isOpened():
-            if last_results is not None:
-                last_results['detections'] = []
-                last_results['class_count'] = {}
-            return
+        self.cap = self.open_camera(camera_id)
 
         try:
             while not (stop_event is not None and stop_event.is_set()):
+                if reload_zones_event is not None and reload_zones_event.is_set():
+                    print(f"🔄 Recarregando zonas da câmera {camera_id} no processo de visão...")
+                    zonas_configuradas = self.zonas_de_monitoramento(camera_id)
+                    reload_zones_event.clear()
+
+                if self.cap is None or not self.cap.isOpened():
+                    print(f"🔄 Tentando reconectar à câmera {camera_id} em 5s...")
+                    time.sleep(5)
+                    self.cap = self.open_camera(camera_id)
+                    continue
+
                 sucesso, frame = self.cap.read()
 
                 if not sucesso:
-                    break
+                    print(f"⚠️ Perda de sinal no stream da câmera {camera_id}. Reiniciando captura...")
+                    if last_results is not None:
+                        last_results['connected'] = False # Marca que o RTSP caiu
+                    self.cap.release()
+                    self.cap = None
+                    time.sleep(2)
+                    continue
+
+                if last_results is not None:
+                    last_results['connected'] = True # Marca que o RTSP está ativo
+                    last_results['last_frame_time'] = time.time()
 
                 detections, class_count = self.object_detection(frame, zonas_configuradas)
-
-                for monitoramento in zonas_configuradas:
-                    nome = self.remover_acentos(monitoramento.nome)
-                    self.desenhar_zona(frame, monitoramento.regiao, nome)
 
                 start_y = 30
                 for idx, (cls_name, count) in enumerate(class_count.items()):
@@ -340,9 +350,16 @@ class VisaoService:
                 sucesso, buffer = cv2.imencode('.jpg', frame)
                 if sucesso and frame_queue is not None:
                     try:
+                        if frame_queue.full():
+                            try:
+                                frame_queue.get_nowait()  # Remove o frame antigo se a fila estiver cheia
+                            except Exception:
+                                pass
                         frame_queue.put(buffer.tobytes(), block=False)
+
                     except Exception:
                         pass
+        
         finally:
             if self.cap is not None:
                 self.cap.release()
@@ -427,6 +444,7 @@ class VisaoService:
 
         detections = []
         class_count = defaultdict(int)
+        img_altura, img_largura = frame.shape[:2]
 
         frame_limpo = frame.copy()
 
@@ -434,8 +452,6 @@ class VisaoService:
         for r in results_object:
             if r.boxes is None:
                 continue
-
-            img_altura, img_largura = frame.shape[:2]
 
             self.processar_active_learning(frame_limpo, r.boxes, (img_altura, img_largura))
 
@@ -450,6 +466,7 @@ class VisaoService:
                 label_name = self.modelo.names[cls].lower()
 
                 zonas_do_objeto = [] # Lista para armazenar os IDs das zonas em que o objeto foi detectado
+                cor_status = 'verde'
 
                 # Itera sobre as zonas configuradas para verificar se o objeto está dentro de alguma delas
                 for monitoramento in zonas_configuradas:
@@ -470,16 +487,12 @@ class VisaoService:
                                     self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')}", self.CORES.get('amarelo', (0, 255, 255)))
                                     self.registrar_alerta_epi_incorreto(monitoramento, f"Equipamento inadequado: {self.classe_epi_por_label(label_name)}", track_id, severidade=1)
                                 else:
-                                    self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')} (Requisitado)", self.CORES.get('verde', (0, 255, 0)))
-
+                                    self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')}", self.CORES.get('verde', (0, 255, 255)))
+                                            
                         # Verifica se o objeto é 'pessoa' e se está dentro da zona que não permite pessoas
                         if label_name == "pessoa" and not self.zona_requer_classe(monitoramento.epis_categoria, "pessoa", monitoramento.permitido):
                             self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name} ID:{track_id} (Zona Restrita)", self.CORES.get('vermelho', (0, 0, 255)))
                             self.registrar_alerta_epi_incorreto(monitoramento, "Pessoa em zona restrita", track_id, severidade=3)
-
-
-                if label_name == "pessoa" and self.zona_requer_classe(monitoramento.epis_categoria, "pessoa"):
-                    self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name} ID:{track_id}", self.CORES.get('magenta', (255, 0, 255)))
                 
                 class_count[label_name] += 1
 
@@ -710,14 +723,16 @@ class VisaoService:
                     for ponto in individual:
                         x, y = int(ponto[0]), int(ponto[1])
                         if x > 0 and y > 0:
-                            cv2.circle(frame, (x, y), 4, self.CORES.get('verde', (0, 255, 0)), -1)
+                            # Keypoints com centro preenchido e contorno
+                            cv2.circle(frame, (x, y), 4, (0, 255, 180), -1, cv2.LINE_AA)
+                            cv2.circle(frame, (x, y), 5, (20, 20, 20), 1, cv2.LINE_AA)
 
                     # Desenhar as conexões do esqueleto
                     for p1, p2 in esqueleto_conexoes:
                         x1, y1 = int(individual[p1][0]), int(individual[p1][1])
                         x2, y2 = int(individual[p2][0]), int(individual[p2][1])
                         if (x1 > 0 and y1 > 0) and (x2 > 0 and y2 > 0):
-                            cv2.line(frame, (x1, y1), (x2, y2), self.CORES.get('magenta', (255, 0, 255)), 2)
+                            cv2.line(frame, (x1, y1), (x2, y2), (255, 180, 0), 2, cv2.LINE_AA)
 
                     # Pega os pontos dos ombros e quadris
                     ombro_esq, ombro_dir = individual[5], individual[6]
@@ -747,14 +762,14 @@ class VisaoService:
                         
                         if is_ma_postura:
                             cor_coluna = self.CORES.get('vermelho', (0, 0, 255))
-                            cv2.putText(frame, f"ALERTA: {motivo}", 
+                            """cv2.putText(frame, f"ALERTA: {motivo}", 
                                         (pt_ombro[0] - 60, pt_ombro[1] - 20),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, cor_coluna, 2)
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, cor_coluna, 2)"""
                             
                             if track_id != -1:
                                 self.registrar_alerta_postura(camera_id, track_id, motivo)
                                 
-                        cv2.line(frame, pt_ombro, pt_quadril, cor_coluna, 4)
+                        cv2.line(frame, pt_ombro, pt_quadril, cor_coluna, 4, cv2.LINE_AA)
 
                         # --- AVALIAÇÃO DA ROTAÇÃO ---
                         is_ma_postura_rotacao, motivo_rotacao, _, _ = self.avaliar_postura(
@@ -764,10 +779,10 @@ class VisaoService:
                         )
                         
                         if is_ma_postura_rotacao:
-                            cv2.putText(frame, f"ALERTA: {motivo_rotacao}", 
+                            """cv2.putText(frame, f"ALERTA: {motivo_rotacao}", 
                                         (pt_ombro[0] - 60, pt_ombro[1] - 40),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.CORES.get('vermelho', (0, 0, 255)), 2)
-                            
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.CORES.get('vermelho', (0, 0, 255)), 2)"""
+
                             if track_id != -1:
                                 self.registrar_alerta_postura(camera_id, track_id, motivo_rotacao)
 
@@ -779,12 +794,13 @@ class VisaoService:
                         )
 
                         if is_caido:
-                            cv2.putText(frame, f"ALERTA: {motivo_queda}", 
+                            """cv2.putText(frame, f"ALERTA: {motivo_queda}", 
                                         (pt_ombro[0] - 60, pt_ombro[1] - 60),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.CORES.get('vermelho', (0, 0, 255)), 2)
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.CORES.get('vermelho', (0, 0, 255)), 2)"""
                             
                             if track_id != -1:
                                 self.registrar_alerta_postura(camera_id, track_id, motivo_queda, severidade=3)
+
 
     def registrar_alerta_postura(self, camera_id: int, track_id: int, motivo: str, severidade: int = 1) -> None:
         """
@@ -820,14 +836,115 @@ class VisaoService:
                 print(f"⚠️ Má postura detectada - ID: {track_id}")
 
 
-    def desenhar_caixa_delimitadora(self, frame, box, label, color=(0, 255, 0)):
+    # ==================================================
+    # Funções para embelezar o UI do vídeo, desenhando zonas, caixas e cantos estilizados
+    # ==================================================
+    def desenhar_cantos(self, frame, x1, y1, x2, y2, cor, espessura=2, comprimento=12):
+        """Desenha os cantos reforçados protegendo os limites da caixa."""
+        largura = max(0, x2 - x1)
+        altura = max(0, y2 - y1)
+        
+        comp_x = min(comprimento, largura // 2)
+        comp_y = min(comprimento, altura // 2)
+
+        if comp_x <= 0 or comp_y <= 0:
+            return
+
+        # Top-Left
+        cv2.line(frame, (x1, y1), (x1 + comp_x, y1), cor, espessura, cv2.LINE_AA)
+        cv2.line(frame, (x1, y1), (x1, y1 + comp_y), cor, espessura, cv2.LINE_AA)
+        # Top-Right
+        cv2.line(frame, (x2, y1), (x2 - comp_x, y1), cor, espessura, cv2.LINE_AA)
+        cv2.line(frame, (x2, y1), (x2, y1 + comp_y), cor, espessura, cv2.LINE_AA)
+        # Bottom-Left
+        cv2.line(frame, (x1, y2), (x1 + comp_x, y2), cor, espessura, cv2.LINE_AA)
+        cv2.line(frame, (x1, y2), (x1, y2 - comp_y), cor, espessura, cv2.LINE_AA)
+        # Bottom-Right
+        cv2.line(frame, (x2, y2), (x2 - comp_x, y2), cor, espessura, cv2.LINE_AA)
+        cv2.line(frame, (x2, y2), (x2, y2 - comp_y), cor, espessura, cv2.LINE_AA)
+
+
+    def desenhar_caixa_delimitadora(self, frame, box, label, color=(0, 210, 255)):
         """
-        Desenha uma caixa delimitadora no frame com o rótulo fornecido.
+        Desenha caixa delimitadora moderna protegida contra overflow de coordenadas.
         """
-        x1, y1, x2, y2 = box
-        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-        cv2.putText(frame, label, (x1, max(y1 - 10, 10)),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+        h_img, w_img = frame.shape[:2]
+
+        # Garante que as coordenadas da caixa fiquem dentro do frame
+        x1 = int(np.clip(box[0], 0, w_img - 1))
+        y1 = int(np.clip(box[1], 0, h_img - 1))
+        x2 = int(np.clip(box[2], 0, w_img - 1))
+        y2 = int(np.clip(box[3], 0, h_img - 1))
+
+        # Se a caixa for inválida ou colapsada, ignora o desenho
+        if x2 <= x1 or y2 <= y1:
+            return
+
+        # Borda sutil de 1px
+        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 1, cv2.LINE_AA)
+        
+        # Cantos estilizados
+        self.desenhar_cantos(frame, x1, y1, x2, y2, color, espessura=2, comprimento=14)
+
+        # Configuração da tipografia
+        fonte = cv2.FONT_HERSHEY_DUPLEX
+        escala = 0.45
+        espessura_txt = 1
+        (largura_txt, altura_txt), baseline = cv2.getTextSize(label, fonte, escala, espessura_txt)
+
+        # Determina a posição vertical do badge evitando sair da imagem
+        padding = 4
+        badge_h = altura_txt + (padding * 2)
+        badge_w = largura_txt + (padding * 2)
+
+        if y1 - badge_h >= 0:
+            # Fica acima da caixa
+            b_y1 = y1 - badge_h
+            b_y2 = y1
+            txt_y = y1 - padding - 1
+        else:
+            # Fica dentro do topo da caixa se não houver espaço em cima
+            b_y1 = y1
+            b_y2 = min(h_img, y1 + badge_h)
+            txt_y = y1 + altura_txt + padding
+
+        b_x1 = x1
+        b_x2 = min(w_img, x1 + badge_w)
+        txt_x = x1 + padding
+
+        # Desenha o fundo da tag e o texto com coordenadas seguras
+        cv2.rectangle(frame, (b_x1, b_y1), (b_x2, b_y2), color, -1)
+        cv2.putText(frame, label, (txt_x, txt_y), fonte, escala, (15, 15, 15), espessura_txt, cv2.LINE_AA)
+
+
+    def desenhar_hud_topo(frame, class_count: dict, fps: float = None):
+        largura = frame.shape[1]
+        
+        # Barra superior semitransparente
+        sobreposicao = frame.copy()
+        cv2.rectangle(sobreposicao, (0, 0), (largura, 42), (20, 20, 20), -1)
+        cv2.addWeighted(sobreposicao, 0.65, frame, 0.35, 0, frame)
+        cv2.line(frame, (0, 42), (largura, 42), (55, 55, 55), 1, cv2.LINE_AA)
+
+        # Itens do HUD
+        offset_x = 20
+        fonte = cv2.FONT_HERSHEY_DUPLEX
+        
+        # Indicador de atividade
+        cv2.circle(frame, (offset_x, 21), 5, (0, 230, 100), -1, cv2.LINE_AA)
+        offset_x += 18
+        cv2.putText(frame, "ONLINE", (offset_x, 26), fonte, 0.45, (230, 230, 230), 1, cv2.LINE_AA)
+        offset_x += 80
+
+        # Contadores
+        for cls_name, count in class_count.items():
+            texto = f"{cls_name.upper()}: {count}"
+            (w, _), _ = cv2.getTextSize(texto, fonte, 0.45, 1)
+            
+            cv2.rectangle(frame, (offset_x - 6, 8), (offset_x + w + 6, 34), (45, 45, 45), -1)
+            cv2.putText(frame, texto, (offset_x, 26), fonte, 0.45, (0, 215, 255), 1, cv2.LINE_AA)
+            offset_x += w + 20
+            
     
     def remover_acentos(self, texto: str) -> str:
         if not texto:

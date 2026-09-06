@@ -40,9 +40,16 @@ def create_visao_bp(connection):
 
             if worker is None:
                 return jsonify({"message": f"Worker para a câmera {camera_id} não está em execução."}), 503
-            
-            return jsonify(worker.get_last_results())
-        return jsonify(visao_service.get_last_results())
+
+            dados = {
+                "detections": worker.last_results.get('detections', []),
+                "class_count": worker.last_results.get('class_count', {}),
+                "connected": worker.last_results.get('connected', False),
+            }
+
+            return jsonify(dados), 200
+        
+        return jsonify({"detections": [], "zonas": []}), 200
 
     @visao_bp.route('/active-learning/toggle', methods=['POST'])
     def toggle_active_learning():
