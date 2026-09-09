@@ -74,9 +74,9 @@ class VisaoService:
         self.modelo = None
         self.modelo_pose = None
 
-        self.active_learning_dir = os.path.join(BASE_DIR, 'assets', 'modelo', 'active_learning', 'dataset_captura')
-        self.al_img_dir = os.path.join(self.active_learning_dir, 'images')
-        self.al_lbl_dir = os.path.join(self.active_learning_dir, 'labels')
+        self.active_learning_dir = os.path.join(BASE_DIR, 'assets', 'modelo', 'active_learning')
+        self.al_img_dir = os.path.join(self.active_learning_dir,  'dataset_captura', 'images')
+        self.al_lbl_dir = os.path.join(self.active_learning_dir,  'dataset_captura', 'labels')
         self.flag_path = os.path.join(self.active_learning_dir, 'active_learning.flag')
         
         os.makedirs(self.al_img_dir, exist_ok=True)
@@ -377,7 +377,7 @@ class VisaoService:
         
         if not os.path.exists(self.flag_path):
             return
-
+        
         with open(self.flag_path, 'r') as f:
             flag_value = f.read().strip()
 
