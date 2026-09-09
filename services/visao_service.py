@@ -128,17 +128,28 @@ class VisaoService:
                 self.cap = cap
                 return self.cap
             else:
+                cap.release()
                 print(f"❌ Falha ao abrir RTSP da câmera {camera_id}. Tentando fallback para webcam local.")
 
-        # Fallback para webcam local
-        cam_idx, backend = self.find_camera()
+        # 2. Fallback para webcam local
+        backend = self.get_plataform_camera()
+        
+        # Abre diretamente sem testar/fechar antes, evitando 'Device busy'
+        for index in (0, 1, 2):
+            cap = cv2.VideoCapture(index, backend)
+            if cap.isOpened():
+                sucesso, _ = cap.read()
+                if sucesso:
+                    print(f"✅ Webcam local conectada com sucesso no índice {index}")
+                    # Descarta mais um frame para estabilizar o sensor de exposição
+                    cap.read()
+                    self.cap = cap
+                    return self.cap
+                cap.release()
 
-        if cam_idx is None:
-            print("❌ Nenhuma câmera disponível encontrada.")
-            return None
-
-        self.cap = cv2.VideoCapture(cam_idx, backend)
-        return self.cap
+        print("❌ Nenhuma câmera disponível encontrada.")
+        self.cap = None
+        return None
 
 
     def get_plataform_camera(self):
@@ -154,27 +165,6 @@ class VisaoService:
             return cv2.CAP_V4L2
         else:
             return cv2.CAP_ANY
-
-
-    def find_camera(self):
-        """
-        Encontra uma câmera disponível no sistema.
-        """
-        
-        cameras = self.cameras_service.listar_cameras()
-        backend = self.get_plataform_camera()
-
-        for index in range(5):
-            cap = cv2.VideoCapture(index, backend)
-            if cap.isOpened():
-                sucesso, _ = cap.read()
-                cap.release()
-
-                if sucesso:
-                    print(f"Câmera encontrada no índice {index}")
-                    return index, backend
-
-        return None, backend
 
 
     def zonas_de_monitoramento(self, id_camera: int) -> list[Zona]:
@@ -291,79 +281,167 @@ class VisaoService:
         return False
 
 
-    def run_video_loop(self, 
-                       camera_id: int = 1, 
-                       frame_queue=None, 
-                       last_results=None, 
-                       stop_event=None, 
-                       reload_zones_event=None
+    def run_batch_video_loop(
+            self, 
+            cameras: list[int],
+            frame_queues: dict,
+            last_results: dict[int, dict], 
+            stop_event=None, 
+            reload_zones_events=None
         ):
 
         """Executa o loop de processamento em um processo separado com reconexão automática."""
         self.ensure_models_loaded()
-        zonas_configuradas = self.zonas_de_monitoramento(camera_id)
 
-        self.cap = self.open_camera(camera_id)
+        caps: dict[int, cv2.VideoCapture] = {}
+        zonas_por_camera: dict[int, list[Zona]] = {}
+        proxima_reconexao: dict[int, float] = {}
+
+        # Dicionários de estado compartilhado entre threads/processos
+        ultimos_frames: dict[int, cv2.Mat] = {}
+        locks_frames: dict[int, threading.Lock] = {}    
+        cameras_ativas_status: dict[int, bool] = {}
+
+        for camera_id in cameras:
+            zonas_por_camera[camera_id] = self.zonas_de_monitoramento(camera_id)
+            locks_frames[camera_id] = threading.Lock()
+            cameras_ativas_status[camera_id] = False
+
+        def thread_captura_camera(cam_id: int):
+            cap = None
+            proxima_tentativa = 0
+
+            while not (stop_event is not None and stop_event.is_set()):
+                tempo_atual = time.time()
+
+                # Tenta abrir/reconectar após um intervalo de tempo
+                if cap is None or not cap.isOpened():
+                    if tempo_atual > proxima_tentativa:
+                        proxima_tentativa = tempo_atual + 5
+
+                        cap = self.open_camera(cam_id)
+
+                        if cap is None or not cap.isOpened():
+                            cameras_ativas_status[camera_id] = False
+
+                            if last_results is not None and camera_id in last_results:
+                                info = last_results[camera_id]
+                                info['connected'] = False
+                                last_results[camera_id] = info
+                            continue
+                    else:
+                        time.sleep(0.1)
+                        continue
+
+                # Leitura contínua de frame
+                sucesso, frame = cap.read()
+                if not sucesso:
+                    cameras_ativas_status[camera_id] = False
+
+                    if last_results is not None and camera_id in last_results:
+                        info = last_results[camera_id]
+                        info['connected'] = False
+                        last_results[camera_id] = info
+
+                    cap.release()
+                    cap = None
+                    proxima_tentativa = tempo_atual + 4
+                    continue
+
+                # Guarda com segurança o último frame lido
+                with locks_frames[camera_id]:
+                    ultimos_frames[camera_id] = frame
+                cameras_ativas_status[camera_id] = True
+
+                if last_results is not None and camera_id in last_results:
+                    info = last_results[camera_id]
+                    info['connected'] = True
+                    info['last_frame_time'] = tempo_atual
+                    last_results[camera_id] = info
+
+            if cap is not None:
+                cap.release()
+                print(f"🛑 Thread de captura da câmera {cam_id} finalizada e liberada.")
+
+        # Inicia uma thread separada para cada câmera para captura contínua de frames
+        threads = []
+        for camera_id in cameras:
+            thread = threading.Thread(target=thread_captura_camera, args=(camera_id,), daemon=True)
+            thread.start()
+            threads.append(thread)
 
         try:
             while not (stop_event is not None and stop_event.is_set()):
-                if reload_zones_event is not None and reload_zones_event.is_set():
-                    print(f"🔄 Recarregando zonas da câmera {camera_id} no processo de visão...")
-                    zonas_configuradas = self.zonas_de_monitoramento(camera_id)
-                    reload_zones_event.clear()
+                tempo_atual = time.time()
+                frames_lote: list[cv2.Mat] = []
+                cams_processadas: list[int] = []
 
-                if self.cap is None or not self.cap.isOpened():
-                    print(f"🔄 Tentando reconectar à câmera {camera_id} em 5s...")
-                    time.sleep(5)
-                    self.cap = self.open_camera(camera_id)
+                # Verifica se não há nenhuma solicitação para recarregar zonas ou realizar reconexão
+                for camera_id in cameras:
+
+                    # Recarregar zonas se solicitado via evento
+                    if reload_zones_events and camera_id in reload_zones_events:
+                        event = reload_zones_events[camera_id]
+
+                        if event.is_set():
+                            print(f"🔄 Recarregando zonas da câmera {camera_id} no processo de visão...")
+                            zonas_por_camera[camera_id] = self.zonas_de_monitoramento(camera_id)
+                            event.clear()
+
+                    if cameras_ativas_status.get(camera_id, False):
+                        with locks_frames[camera_id]:
+                            frame = ultimos_frames.get(camera_id)
+
+                        if frame is not None:
+                            frames_lote.append(frame)
+                            cams_processadas.append(camera_id)
+
+                if not frames_lote:
+                    time.sleep(0.01)
                     continue
 
-                sucesso, frame = self.cap.read()
+                # Inferência YOLO em lotes (Deteção de objetos e avaliação de postura)
+                batch_detections, batch_count = self.batch_object_detection(frames_lote, cams_processadas, zonas_por_camera)
+                self.batch_pose_estimation(frames_lote, cams_processadas)
 
-                if not sucesso:
-                    print(f"⚠️ Perda de sinal no stream da câmera {camera_id}. Reiniciando captura...")
-                    if last_results is not None:
-                        last_results['connected'] = False # Marca que o RTSP caiu
-                    self.cap.release()
-                    self.cap = None
-                    time.sleep(2)
-                    continue
+                for idx, camera_id in enumerate(cams_processadas):
+                    frame_final = frames_lote[idx]
+                    detections = batch_detections[idx]
+                    class_count = batch_count[idx]
 
-                if last_results is not None:
-                    last_results['connected'] = True # Marca que o RTSP está ativo
-                    last_results['last_frame_time'] = time.time()
+                    if camera_id in last_results:
+                        info = last_results[camera_id]
+                        info['detections'] = detections
+                        info['class_count'] = dict(class_count)
+                        last_results[camera_id] = info
 
-                detections, class_count = self.object_detection(frame, zonas_configuradas)
 
-                start_y = 30
-                for idx, (cls_name, count) in enumerate(class_count.items()):
-                    cv2.putText(frame, f"{cls_name}: {count}", (10, start_y + idx * 30),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, self.CORES.get('branco', (255, 255, 255)), 2)
+                    # >>>>>>>>>>>> PODE REMOVER ISSO, DEPOIS SOMENTE DEBUG <<<<<<<<<<<<
+                    start_y = 30
+                    for i, (cls_name, count) in enumerate(class_count.items()):
+                        cv2.putText(frame_final, f"{cls_name}: {count}", (10, start_y + i * 30),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, self.CORES.get('branco', (255, 255, 255)), 2)
+                    # =================================================================
+                            
+                    # Despacha o frame para a fila da respectiva câmera
+                    frame_queue = frame_queues.get(camera_id)
+                    if frame_queue is not None:
+                        sucesso_enc, buffer = cv2.imencode('.jpg', frame_final)
 
-                self.last_results = detections
-                if last_results is not None:
-                    last_results['detections'] = detections
-                    last_results['class_count'] = dict(class_count)
-
-                self.pose_estimation(frame, camera_id)
-
-                sucesso, buffer = cv2.imencode('.jpg', frame)
-                if sucesso and frame_queue is not None:
-                    try:
-                        if frame_queue.full():
+                        if sucesso_enc:
+                            if frame_queue.full():
+                                try:
+                                    frame_queue.get_nowait()  # Remove o frame antigo se a fila estiver cheia
+                                except Exception:
+                                    pass
                             try:
-                                frame_queue.get_nowait()  # Remove o frame antigo se a fila estiver cheia
+                                frame_queue.put(buffer.tobytes(), block=False)
                             except Exception:
                                 pass
-                        frame_queue.put(buffer.tobytes(), block=False)
-
-                    except Exception:
-                        pass
-        
         finally:
-            if self.cap is not None:
-                self.cap.release()
-            self.cap = None
+            for cap in caps.values():
+                if cap is not None:
+                    cap.release()
 
 
     def get_last_results(self):
@@ -434,78 +512,86 @@ class VisaoService:
             self._salvar_active_learning_async(frame_limpo, yolo_anotacoes, img_filename, lbl_filename)
         
 
-    def object_detection(self, frame, zonas_configuradas):
+    def batch_object_detection(self, frames: list, cam_ids: list[int], zonas_por_camera: dict[int, list[Zona]]) -> tuple[list[list[dict]], list[defaultdict]]:
         """
-            Realiza a detecção de objetos no frame e verifica se eles estão dentro das zonas configuradas, além de verificar se possuem o EPI obrigatório.
+            Recebe uma lista de frame e IDs de câmeras e executa a inferência em lote.
         """
         self.ensure_models_loaded()
 
-        results_object = self.modelo.track(frame, persist=True, conf=0.5, iou=0.4, verbose=False)
+        if not frames:
+            return [], []
 
-        detections = []
-        class_count = defaultdict(int)
-        img_altura, img_largura = frame.shape[:2]
+        results_objects = self.modelo.track(frames, persist=True, conf=0.5, iou=0.4, verbose=False)
 
-        frame_limpo = frame.copy()
+        batch_detections = []
+        batch_class_count = []
 
-        # Itera sobre os resultados da detecção
-        for r in results_object:
-            if r.boxes is None:
-                continue
+        for idx, result in enumerate(results_objects):
+            frame = frames[idx]
+            cam_id = cam_ids[idx]
+            zonas_configuradas = zonas_por_camera.get(cam_id, [])
 
-            self.processar_active_learning(frame_limpo, r.boxes, (img_altura, img_largura))
+            detections = []
+            class_count = defaultdict(int)        
+            img_altura, img_largura = frame.shape[:2]
+            frame_limpo = frame.copy()
 
-            # Itera sobre cada caixa detectada
-            for box in r.boxes:
-                xyxy = box.xyxy[0].cpu().numpy().astype(int) # Obtém as coordenadas da caixa delimitadora
-                cls = int(box.cls[0]) # Obtém a classe do objeto detectado
-                conf = float(box.conf[0]) # Obtém a confiança da detecção
+            if result.boxes is not None:
+                self.processar_active_learning(frame_limpo, result.boxes, (img_altura, img_largura))
 
-                # Obtém o ID do objeto rastreado (track_id) e o nome da classe (label_name)
-                track_id = int(box.id[0]) if box.id is not None else -1
-                label_name = self.modelo.names[cls].lower()
+                # Itera sobre cada caixa detectada
+                for box in result.boxes:
+                    xyxy = box.xyxy[0].cpu().numpy().astype(int) # Obtém as coordenadas da caixa delimitadora
+                    cls = int(box.cls[0]) # Obtém a classe do objeto detectado
+                    conf = float(box.conf[0]) # Obtém a confiança da detecção
 
-                zonas_do_objeto = [] # Lista para armazenar os IDs das zonas em que o objeto foi detectado
-                cor_status = 'verde'
+                    # Obtém o ID do objeto rastreado (track_id) e o nome da classe (label_name)
+                    track_id = int(box.id[0]) if box.id is not None else -1
+                    label_name = self.modelo.names[cls].lower()
 
-                # Itera sobre as zonas configuradas para verificar se o objeto está dentro de alguma delas
-                for monitoramento in zonas_configuradas:
-                    regiao_px = self.regiao_para_pixels(monitoramento.regiao, img_largura, img_altura)
-                    if self.caixas_intersectam(xyxy, self.regiao_para_caixa(regiao_px)):
+                    zonas_do_objeto = [] # Lista para armazenar os IDs das zonas em que o objeto foi detectado
 
-                        # Verifica se o objeto é requisitado na zona
-                        if self.zona_requer_classe(monitoramento.epis_categoria, self.classe_epi_por_label(label_name), monitoramento.permitido):
-                            zonas_do_objeto.append(monitoramento.id)
+                    # Itera sobre as zonas configuradas para verificar se o objeto está dentro de alguma delas
+                    for monitoramento in zonas_configuradas:
+                        regiao_px = self.regiao_para_pixels(monitoramento.regiao, img_largura, img_altura)
+                        if self.caixas_intersectam(xyxy, self.regiao_para_caixa(regiao_px)):
 
-                            # Verifica se o objeto é 'com_...' ou 'sem_...' e se está dentro da zona que requer o EPI correspondente
-                            if label_name.startswith("sem_"):
-                                self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name}", self.CORES.get('vermelho', (0, 0, 255)))
-                                self.registrar_alerta_epi_incorreto(monitoramento, f"Sem EPI necessário: {self.classe_epi_por_label(label_name)}", track_id, severidade=2)
-                            else:
-                                # Verifica se o objeto é normal, caso seja desenha a caixa delimitadora em amarelo e registra o alerta de EPI incorreto
-                                if label_name.endswith("_normal"):
-                                    self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')}", self.CORES.get('amarelo', (0, 255, 255)))
-                                    self.registrar_alerta_epi_incorreto(monitoramento, f"Equipamento inadequado: {self.classe_epi_por_label(label_name)}", track_id, severidade=1)
+                            # Verifica se o objeto é requisitado na zona
+                            if self.zona_requer_classe(monitoramento.epis_categoria, self.classe_epi_por_label(label_name), monitoramento.permitido):
+                                zonas_do_objeto.append(monitoramento.id)
+
+                                # Verifica se o objeto é 'com_...' ou 'sem_...' e se está dentro da zona que requer o EPI correspondente
+                                if label_name.startswith("sem_"):
+                                    self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name}", self.CORES.get('vermelho', (0, 0, 255)))
+                                    self.registrar_alerta_epi_incorreto(monitoramento, f"Sem EPI necessário: {self.classe_epi_por_label(label_name)}", track_id, severidade=2)
                                 else:
-                                    self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')}", self.CORES.get('verde', (0, 255, 255)))
-                                            
-                        # Verifica se o objeto é 'pessoa' e se está dentro da zona que não permite pessoas
-                        if label_name == "pessoa" and not self.zona_requer_classe(monitoramento.epis_categoria, "pessoa", monitoramento.permitido):
-                            self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name} ID:{track_id} (Zona Restrita)", self.CORES.get('vermelho', (0, 0, 255)))
-                            self.registrar_alerta_epi_incorreto(monitoramento, "Pessoa em zona restrita", track_id, severidade=3)
-                
-                class_count[label_name] += 1
+                                    # Verifica se o objeto é normal, caso seja desenha a caixa delimitadora em amarelo e registra o alerta de EPI incorreto
+                                    if label_name.endswith("_normal"):
+                                        self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')}", self.CORES.get('amarelo', (0, 255, 255)))
+                                        self.registrar_alerta_epi_incorreto(monitoramento, f"Equipamento inadequado: {self.classe_epi_por_label(label_name)}", track_id, severidade=1)
+                                    else:
+                                        self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')}", self.CORES.get('verde', (0, 255, 255)))
+                                                
+                            # Verifica se o objeto é 'pessoa' e se está dentro da zona que não permite pessoas
+                            if label_name == "pessoa" and not self.zona_requer_classe(monitoramento.epis_categoria, "pessoa", monitoramento.permitido):
+                                self.desenhar_caixa_delimitadora(frame, xyxy, f"{label_name} ID:{track_id} (Zona Restrita)", self.CORES.get('vermelho', (0, 0, 255)))
+                                self.registrar_alerta_epi_incorreto(monitoramento, "Pessoa em zona restrita", track_id, severidade=3)
+                    
+                    class_count[label_name] += 1
 
-                # Adiciona a detecção à lista de detecções, associando-a às zonas em que o objeto foi detectado
-                for z_id in zonas_do_objeto:
-                    detections.append({
-                        "id": track_id,
-                        "label": label_name,
-                        "confidence": conf,
-                        "zona": z_id
-                    })
+                    # Adiciona a detecção à lista de detecções, associando-a às zonas em que o objeto foi detectado
+                    for z_id in zonas_do_objeto:
+                        detections.append({
+                            "id": track_id,
+                            "label": label_name,
+                            "confidence": conf,
+                            "zona": z_id
+                        })
 
-        return detections, class_count
+            batch_detections.append(detections)
+            batch_class_count.append(class_count)
+
+        return batch_detections, batch_class_count
 
     def _salvar_active_learning_async(self, frame_limpo, yolo_anotacoes, img_filename, lbl_filename):
         """
@@ -690,13 +776,17 @@ class VisaoService:
             return is_ma_postura, motivo, (centro_x, centro_y), (centro_x, centro_y)
 
 
-    def pose_estimation(self, frame, camera_id):
+    def batch_pose_estimation(self, frames: list, cameras_id: list[int]) -> None:
         """
         Implementa a lógica de estimativa de pose, desenha o esqueleto e 
         calcula a inclinação do tronco para gerar alertas de má postura.
         """
         self.ensure_models_loaded()
-        results = self.modelo_pose.track(frame, persist=True, conf=0.5, verbose=False)
+
+        if not frames:
+            return
+        
+        results = self.modelo_pose.track(frames, persist=True, conf=0.5, verbose=False)
 
         esqueleto_conexoes = [
             (0, 1), (0, 2), (1, 3), (2, 4),            
@@ -705,7 +795,10 @@ class VisaoService:
             (11, 13), (13, 15), (12, 14), (14, 16)     
         ]
 
-        for result in results:
+        for i, result in enumerate(results):
+            frame = frames[i]
+            camera_id = cameras_id[i]
+            
             if result.keypoints is not None and len(result.keypoints) > 0:
                 keypoints_list = result.keypoints.xy.cpu().numpy()
                 

@@ -2,46 +2,51 @@ from worker.vision_worker import VisionWorker
 
 workers: dict[int, VisionWorker] = {}
 
-def iniciar_todos_os_workers(cameras_id: list[int]):
+def iniciar_vision_workers(cameras_id: list[int], tamanho_lote: int = 5):
     """
-        Lista todas as câmeras cadastradas e inicia um VisionWorker para cada uma delas.
+    Inicia os VisionWorkers agrupando as câmeras em lotes.
     """
-    for camera_id in cameras_id:
-        if camera_id not in workers:
-            worker = VisionWorker(camera_id=camera_id)
-            worker.start()
-            workers[camera_id] = worker
-            print(f"🎥 Worker para câmera {camera_id} iniciado.")
-        
 
-def iniciar_vision_workers(camera_ids: list[int]):
-    """
-    Inicia os VisionWorkers para as câmeras especificadas.
-    """
-    for camera_id in camera_ids:
-        if camera_id not in workers:
-            worker = VisionWorker(camera_id=camera_id)
-            worker.start()
-            workers[camera_id] = worker
-            print(f"🎥 Worker para câmera {camera_id} iniciado.")
+    for idx in range(0, len(cameras_id), tamanho_lote):
+        lote = cameras_id[idx:idx + tamanho_lote]
 
+        # Filtra as câmeras que não possuem um worker ativo
+        lote_novas: list[int] = []
+        for camera in lote:
+            if camera not in workers:
+                lote_novas.append(camera)
+
+        if not lote_novas:
+            continue
+
+        worker = VisionWorker(cameras_lote=lote_novas)
+        worker.start()
+
+        for camera_id in lote_novas:
+            workers[camera_id] = worker
+
+        print(f"🎥 Worker de lote iniciado para as câmeras: {lote_novas}")
 
 def parar_vision_workers():
-    """Finaliza todos os workers de forma segura ao encerrar a aplicação."""
-    for camera_id, worker in list(workers.items()):
-        print(f"🛑 Encerrando worker da câmera {camera_id}...")
+    """Finaliza todos os workers de forma segura (sem duplicar chamadas)."""
+    workers_unicos = set(workers.values())
+
+    print(f"🛑 Parando {len(workers_unicos)} workers de visão...")
+
+    for worker in workers_unicos:
         worker.stop()
 
     workers.clear()
 
 
 def get_camera_status(camera_id: int) -> dict:
+    """Retorna o status da câmera especificada."""
     worker = workers.get(camera_id)
 
     if not worker:
         return 'Inativo'
 
-    return 'Ativo' if worker.is_online() else 'Desconectado'
+    return 'Ativo' if worker.is_online(camera_id) else 'Desconectado'
 
 def notificar_atualizacao_zonas(camera_id: int):
     """
@@ -50,7 +55,7 @@ def notificar_atualizacao_zonas(camera_id: int):
     worker = workers.get(camera_id)
 
     if worker:
-        worker.reload_zones()
+        worker.reload_zones(camera_id)
 
 def notificar_desligamento_camera(camera_id: int):
     """
@@ -59,6 +64,8 @@ def notificar_desligamento_camera(camera_id: int):
     worker = workers.get(camera_id)
 
     if worker:
-        worker.stop()
+        if len(worker.cameras) <= 1:
+            worker.stop()
+
         del workers[camera_id]
         print(f"🛑 Worker para a câmera {camera_id} foi desligado.")

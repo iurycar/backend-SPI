@@ -8,7 +8,7 @@ import redis
 import os
 
 from events.alertas_events import register_socket_events
-from worker.vision_manager import iniciar_todos_os_workers, parar_vision_workers
+from worker.vision_manager import iniciar_vision_workers, parar_vision_workers
 from services.cameras_service import CamerasService
 from extensions import socketio, REDIS_URL
 from connection.conn import Connection
@@ -88,6 +88,6 @@ if __name__ == '__main__':
         for camera in cameras_service.listar_cameras():
             cameras_id.append(camera['id'])
 
-        iniciar_todos_os_workers(cameras_id=cameras_id)
+        iniciar_vision_workers(cameras_id=cameras_id, tamanho_lote=1)
 
     socketio.run(app, host='0.0.0.0', port=5000, debug=True, use_reloader=False)

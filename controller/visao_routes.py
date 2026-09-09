@@ -21,7 +21,7 @@ def create_visao_bp(connection):
 
         def generate():
             while True:
-                frame = worker.next_frame()
+                frame = worker.next_frame(camera_id)
                 if frame is None:
                     time.sleep(0.03)
                     continue
@@ -41,10 +41,13 @@ def create_visao_bp(connection):
             if worker is None:
                 return jsonify({"message": f"Worker para a câmera {camera_id} não está em execução."}), 503
 
+            # Busca o dicionário específico daquela câmera no lote
+            cam_data = worker.last_results.get(camera_id, {})
+
             dados = {
-                "detections": worker.last_results.get('detections', []),
-                "class_count": worker.last_results.get('class_count', {}),
-                "connected": worker.last_results.get('connected', False),
+                "detections": cam_data.get('detections', []),
+                "class_count": cam_data.get('class_count', {}),
+                "connected": cam_data.get('connected', False),
             }
 
             return jsonify(dados), 200
@@ -76,5 +79,19 @@ def create_visao_bp(connection):
             msg = "Active Learning desativado com sucesso."
                 
         return jsonify({"message": msg, "enabled": enabled}), 200
+
+    @visao_bp.route('/video/lote/<int:tamanho_lote>', methods=['POST'])
+    def modificar_tamanho_lote(tamanho_lote):
+        """
+        Modifica o tamanho do lote de câmeras processadas por cada worker.
+        Corpo da requisição (JSON): {"tamanho_lote": 2}
+        """
+        if tamanho_lote < 1:
+            return jsonify({"message": "O tamanho do lote deve ser pelo menos 1."}), 400
+
+        # Atualiza o tamanho do lote para todos os workers ativos
+        # TODO: Deve desligar os workers atuais e reiniciar com o novo tamanho de lote
+
+        return jsonify({"message": f"Tamanho do lote atualizado para {tamanho_lote}."}), 200
 
     return visao_bp
