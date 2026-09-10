@@ -95,8 +95,10 @@ class VisionWorker:
             print(f"❌ Worker de lote falhou: {exc}")
 
     def next_frame(self, camera_id: int = None) -> bytes | None:
-        target_id = camera_id or self.cameras[0]  # Se não for fornecido, pega a primeira câmera do lote
-        queue = self.frame_queues.get(target_id)
+        if camera_id is None:
+            return None
+
+        queue = self.frame_queues.get(camera_id)
 
         if not queue:
             return None
