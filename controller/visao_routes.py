@@ -21,7 +21,7 @@ def create_visao_bp(connection):
 
         def generate():
             while True:
-                frame = worker.next_frame(camera_id)
+                frame = worker.next_frame(camera_id=camera_id)
                 if frame is None:
                     time.sleep(0.03)
                     continue
