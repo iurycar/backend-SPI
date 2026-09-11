@@ -23,12 +23,12 @@ INSERT INTO responsabilidade (id_usuario, id_setor) VALUES
 
 -- 4. POPULAR TABELA CAMERAS (Depende de setores)
 -- Câmera 1 e 2 no Setor 1, Câmera 3 no Setor 3
-INSERT INTO cameras (nome, ip, id_setor) VALUES
-('Fresa 1', 'rtsp://admin:SIDI2023@10.14.22.97:554/cam/realmonitor?channel=1&subtype=0', 1),
-('Fresa 2', 'rtsp://admin:SIDI2023@10.14.22.98:554/cam/realmonitor?channel=1&subtype=0', 1),
-('Tenda', 'rtsp://admin:SIDI2023@10.14.22.99:554/cam/realmonitor?channel=1&subtype=0', 2),
-('Sala 4', 'rtsp://admin:SIDI2023@10.14.24.6:554/cam/realmonitor?channel=1&subtype=0', 3),
-('SICK Visionary-B Two', 'rtsp://10.14.22.96:554/video', 4);
+INSERT INTO cameras (nome, ip, id_setor, rotacao, espelhar_horizontal, espelhar_vertical) VALUES
+('Fresa 1', 'rtsp://admin:SIDI2023@10.14.22.97:554/cam/realmonitor?channel=1&subtype=0', 1, 90, FALSE, FALSE),
+('Fresa 2', 'rtsp://admin:SIDI2023@10.14.22.98:554/cam/realmonitor?channel=1&subtype=0', 1, 90, FALSE, FALSE),
+('Tenda', 'rtsp://admin:SIDI2023@10.14.22.99:554/cam/realmonitor?channel=1&subtype=0', 2, 0, FALSE, FALSE),
+('Sala 4', 'rtsp://admin:SIDI2023@10.14.24.6:554/cam/realmonitor?channel=1&subtype=0', 3, 0, FALSE, FALSE),
+('SICK Visionary-B Two', 'rtsp://10.14.22.96:554/video', 4, 0, TRUE, FALSE);
 
 
 -- 5. POPULAR TABELA ZONAS (Depende de cameras)
@@ -36,9 +36,9 @@ INSERT INTO cameras (nome, ip, id_setor) VALUES
 INSERT INTO zonas (nome, x, y, largura, altura, permitido, id_camera) VALUES
 ('Fresa 1',   				0,  0, 	1, 	1, 	TRUE,  	1), -- Zona 1 (CAM 1) (Setor 1)
 ('Fresa 2',   				0,  0, 	1, 	1, 	TRUE,  	1), -- Zona 2 (CAM 2) (Setor 1)
-('Tenda',     				0,  0, 	1, 	1, 	TRUE,  	2), -- Zona 3 (CAM 2) (Setor 2)
+('Fresa 2',     			0,  0, 	1, 	1, 	TRUE,  	2), -- Zona 3 (CAM 2) (Setor 2)
 ('Sala 4',    				0,  0, 	1, 	1, 	TRUE,  	3), -- Zona 4 (CAM 3) (Setor 3)
-('SICK Visionary-B Two',    0, 	0, 	1, 	1, 	TRUE,   4); -- Zona 5 (CAM4) (Setor 4)
+('SICK Visionary-B Two',    0, 	0, 	1, 	1, 	TRUE,   4); -- Zona 5 (CAM 4) (Setor 4)
 
 
 -- 6. POPULAR TABELA EPIS

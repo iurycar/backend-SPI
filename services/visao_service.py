@@ -2,7 +2,6 @@ from collections import defaultdict
 from extensions import REDIS_URL
 from ultralytics import YOLO
 import numpy as np
-import unicodedata
 import threading
 import platform
 import redis
@@ -15,14 +14,13 @@ from repository.monitoramento_repository import MonitoramentoRepository
 from repository.setores_repository import SetoresRepository
 from services.cameras_service import CamerasService
 from services.alertas_service import AlertasService
-from models.alertas import Alerta
 from models.zonas import Zona
 
 from tasks.alarme_task import enviar_comando
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, 'assets', 'modelo', 'treinamento', 'weights', 'best.pt')
-MODEL_PATH_POSE = os.path.join(BASE_DIR, 'assets', 'modelo', 'treinamento', 'weights', 'yolov8s-pose.pt')
+MODEL_PATH_POSE = os.path.join(BASE_DIR, 'assets', 'modelo', 'treinamento', 'weights', 'yolov8m-pose.pt')
 
 class VisaoService:
     EPI_CLASSE_POR_LABEL = {
@@ -83,6 +81,8 @@ class VisaoService:
         os.makedirs(self.al_lbl_dir, exist_ok=True)
         self._al_cooldown = {}
 
+        self._webcam_lock = threading.Lock()
+
     def _ensure_models_loaded(self):
         if self.modelo is None:
             self.modelo = YOLO(MODEL_PATH)
@@ -129,23 +129,24 @@ class VisaoService:
                 return self.cap
             else:
                 cap.release()
-                print(f"❌ Falha ao abrir RTSP da câmera {camera_id}. Tentando fallback para webcam local.")
 
         # 2. Fallback para webcam local
+        print(f"❌ Falha ao abrir RTSP da câmera {camera_id}. Tentando fallback para webcam local.")
         backend = self.get_plataform_camera()
         
         # Abre diretamente sem testar/fechar antes, evitando 'Device busy'
-        for index in (0, 1, 2):
-            cap = cv2.VideoCapture(index, backend)
-            if cap.isOpened():
-                sucesso, _ = cap.read()
-                if sucesso:
-                    print(f"✅ Webcam local conectada com sucesso no índice {index}")
-                    # Descarta mais um frame para estabilizar o sensor de exposição
-                    cap.read()
-                    self.cap = cap
-                    return self.cap
-                cap.release()
+        with self._webcam_lock:
+            for index in (0, 1, 2):
+                cap = cv2.VideoCapture(index, backend)
+                if cap.isOpened():
+                    sucesso, _ = cap.read()
+                    if sucesso:
+                        print(f"✅ Webcam local conectada com sucesso no índice {index}")
+                        # Descarta mais um frame para estabilizar o sensor de exposição
+                        cap.read()
+                        self.cap = cap
+                        return self.cap
+                    cap.release()
 
         print("❌ Nenhuma câmera disponível encontrada.")
         self.cap = None
@@ -347,8 +348,13 @@ class VisaoService:
 
                     cap.release()
                     cap = None
+
+                    if hasattr(self.modelo, 'predictor') and self.modelo.predictor is not None:
+                        self.modelo.predictor.trackers = None  # Limpa os rastreadores para evitar inconsistências
                     proxima_tentativa = tempo_atual + 4
                     continue
+
+                frame = self.aplicar_transformacoes_frame(frame, cam_id)
 
                 # Guarda com segurança o último frame lido
                 with locks_frames[cam_id]:
@@ -408,8 +414,12 @@ class VisaoService:
                     frames_lote.append(pacote[1])
 
                 # Inferência YOLO em lotes (Deteção de objetos e avaliação de postura)
-                batch_detections, batch_count = self._batch_object_detection(frames_lote, cams_processadas, zonas_por_camera)
-                self._batch_pose_estimation(frames_lote, cams_processadas)
+                try:
+                    batch_detections, batch_count = self._batch_object_detection(frames_lote, cams_processadas, zonas_por_camera)
+                    self._batch_pose_estimation(frames_lote, cams_processadas)
+                except cv2.error as e:
+                    print(f"❌ Erro de OpenCV durante a inferência em lote: {e}")
+                    continue
 
                 # Despacho dos resultados e frames estritamente emparelhados por camera_id
                 for idx, (camera_id, frame_final) in enumerate(pacotes_lote):
@@ -449,6 +459,54 @@ class VisaoService:
 
     def get_last_results(self):
         return self.last_results
+
+
+    def aplicar_transformacoes_frame(
+            self,
+            frame: np.ndarray,
+            camera_id: int
+    ) -> np.ndarray:
+        """
+        Aplica rotação ortogonal e/ou espelhamento ao frame de uma câmera específica.
+
+        :param frame: Imagem capturada (matriz numpy/cv2.Mat).
+        :param camera_id: ID da câmera para rastreabilidade de logs.
+        :param rotacao: Graus de rotação no sentido horário (90, 180, 270 ou 0/None).
+        :param espelhar_horizontal: True para espelhar horizontalmente (flip eixo Y).
+        :param espelhar_vertical: True para espelhar verticalmente (flip eixo X).
+        :return: Frame processado.
+        """
+        if frame is None or frame.size == 0:
+            return frame
+
+        frame_processado = frame
+
+        rotacao, espelhar_horizontal, espelhar_vertical = self.cameras_service.obter_transformacoes_camera(camera_id)
+
+        # 1. Rotação Ortogonal (cv2.rotate é O(1) em memória, sem interpolação afim)
+        if rotacao in (90, -270):
+            frame_processado = cv2.rotate(frame_processado, cv2.ROTATE_90_CLOCKWISE)
+        elif rotacao in (180, -180):
+            frame_processado = cv2.rotate(frame_processado, cv2.ROTATE_180)
+        elif rotacao in (270, -90):
+            frame_processado = cv2.rotate(frame_processado, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        elif rotacao not in (0, None):
+            # Fallback para ângulos não múltiplos de 90° usando matriz afim
+            altura, largura = frame_processado.shape[:2]
+            centro = (largura // 2, altura // 2)
+            matriz = cv2.getRotationMatrix2D(centro, -rotacao, 1.0)
+            frame_processado = cv2.warpAffine(frame_processado, matriz, (largura, altura))
+
+        # 2. Espelhamento (Flip)
+        # cv2.flip: 1 = horizontal, 0 = vertical, -1 = ambos
+        if espelhar_horizontal and espelhar_vertical:
+            frame_processado = cv2.flip(frame_processado, -1)
+        elif espelhar_horizontal:
+            frame_processado = cv2.flip(frame_processado, 1)
+        elif espelhar_vertical:
+            frame_processado = cv2.flip(frame_processado, 0)
+
+        return frame_processado
 
 
     def _processar_active_learning(self, frame_limpo, boxes, img_shape):
@@ -524,7 +582,7 @@ class VisaoService:
         if not frames:
             return [], []
 
-        results_objects = self.modelo.track(frames, persist=True, conf=0.5, iou=0.4, verbose=False)
+        results_objects = self.modelo.track(frames, persist=True, conf=0.5, iou=0.4, tracker="bytetrack.yaml", verbose=False)
 
         batch_detections = []
         batch_class_count = []
@@ -789,7 +847,7 @@ class VisaoService:
         if not frames:
             return
         
-        results = self.modelo_pose.track(frames, persist=True, conf=0.5, verbose=False)
+        results = self.modelo_pose.track(frames, persist=True, conf=0.5, tracker="bytetrack.yaml", verbose=False)
 
         esqueleto_conexoes = [
             (0, 1), (0, 2), (1, 3), (2, 4),            
@@ -927,9 +985,6 @@ class VisaoService:
                 severidade=severidade,
                 destinatarios=responsaveis
             )
-
-            if sucesso:
-                print(f"⚠️ Má postura detectada - ID: {track_id}")
 
 
     # ==================================================
