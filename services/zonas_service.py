@@ -104,7 +104,8 @@ class ZonasService:
             zona_dto.y,
             zona_dto.largura,
             zona_dto.altura,
-            zona_dto.permitido
+            zona_dto.permitido,
+            id_epi=zona_dto.id_epi
         )
 
         if zona:

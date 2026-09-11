@@ -1,4 +1,7 @@
 from collections import defaultdict
+from core.vision_metrics import FrameMetrics
+from core.alerta_diagnostics import trace_alert_candidate
+from core.tipo_deteccao import TIPOS_POSTURA
 from extensions import REDIS_URL
 from ultralytics import YOLO
 import numpy as np
@@ -10,6 +13,8 @@ import math
 import time
 import cv2
 import os
+import logging
+import psycopg2
 
 from repository.monitoramento_repository import MonitoramentoRepository
 from repository.setores_repository import SetoresRepository
@@ -23,6 +28,7 @@ from tasks.alarme_task import enviar_comando
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, 'assets', 'modelo', 'treinamento', 'weights', 'best.pt')
 MODEL_PATH_POSE = os.path.join(BASE_DIR, 'assets', 'modelo', 'treinamento', 'weights', 'yolov8s-pose.pt')
+logger = logging.getLogger(__name__)
 
 class VisaoService:
     EPI_CLASSE_POR_LABEL = {
@@ -299,7 +305,10 @@ class VisaoService:
         zonas_por_camera: dict[int, list[Zona]] = {}
         
         # Dicionários de estado compartilhado entre threads/processos
-        ultimos_frames: dict[int, cv2.Mat] = {}
+        ultimos_frames = {}  # camera_id -> (sequence, frame, captured_at)
+        sequencias = defaultdict(int)
+        processados = defaultdict(int)
+        metricas = {camera_id: FrameMetrics() for camera_id in cameras}
         locks_frames: dict[int, threading.Lock] = {}    
         cameras_ativas_status: dict[int, bool] = {}
 
@@ -352,13 +361,14 @@ class VisaoService:
 
                 # Guarda com segurança o último frame lido
                 with locks_frames[cam_id]:
-                    ultimos_frames[cam_id] = frame
+                    sequencias[cam_id] += 1
+                    ultimos_frames[cam_id] = (sequencias[cam_id], frame, time.monotonic())
                 cameras_ativas_status[cam_id] = True
 
                 if last_results is not None and cam_id in last_results:
                     info = last_results[cam_id]
                     info['connected'] = True
-                    info['last_frame_time'] = tempo_atual
+                    info['last_frame_time'] = time.time()
                     last_results[cam_id] = info
 
                 time.sleep(0.01)  # Pequena pausa para evitar uso excessivo de CPU
@@ -394,10 +404,11 @@ class VisaoService:
 
                     if cameras_ativas_status.get(camera_id, False):
                         with locks_frames[camera_id]:
-                            frame = ultimos_frames.get(camera_id)
+                            pacote = ultimos_frames.get(camera_id)
 
-                            if frame is not None:
-                                pacotes_lote.append((camera_id, frame.copy()))
+                            if pacote is not None and pacote[0] > processados[camera_id]:
+                                sequence, frame, captured_at = pacote
+                                pacotes_lote.append((camera_id, frame.copy(), captured_at, sequence))
 
                 if not pacotes_lote:
                     time.sleep(0.01)
@@ -412,7 +423,8 @@ class VisaoService:
                 self._batch_pose_estimation(frames_lote, cams_processadas)
 
                 # Despacho dos resultados e frames estritamente emparelhados por camera_id
-                for idx, (camera_id, frame_final) in enumerate(pacotes_lote):
+                for idx, (camera_id, frame_final, captured_at, sequence) in enumerate(pacotes_lote):
+                    processados[camera_id] = sequence
                     detections = batch_detections[idx]
                     class_count = batch_count[idx]
 
@@ -421,6 +433,9 @@ class VisaoService:
                         info = last_results[camera_id]
                         info['detections'] = detections
                         info['class_count'] = dict(class_count)
+                        measurement = metricas[camera_id].complete(captured_at, time.monotonic())
+                        # One assignment publishes detections and their measurements together.
+                        info['result'] = dict(measurement, detections=detections, class_count=dict(class_count))
                         last_results[camera_id] = info
 
 
@@ -624,7 +639,10 @@ class VisaoService:
         cache_chave = f"lock:alerta:epi:{monitoramento.id_monitorar}:{evento}:{track_id}"
 
         # Se a chave já existir, significa que um alerta recente já foi registrado para este evento e track_id
-        if not self.redis_client.set(cache_chave, "1", ex=30, nx=True):
+        acquired = self.redis_client.set(cache_chave, "1", ex=30, nx=True)
+        trace_alert_candidate('epi', monitoramento.id_camera, monitoramento.id,
+                              evento, track_id, acquired)
+        if not acquired:
             return # Já existe um alerta recente para este evento e track_id
 
         setor = self.setores_repository.get_setor_por_id_zona(monitoramento.id)
@@ -863,7 +881,9 @@ class VisaoService:
                                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, cor_coluna, 2)"""
                             
                             if track_id != -1:
-                                self._registrar_alerta_postura(camera_id, track_id, motivo)
+                                self._registrar_alerta_postura(
+                                    camera_id, track_id, motivo, tipo_deteccao='postura_tronco'
+                                )
                                 
                         cv2.line(frame, pt_ombro, pt_quadril, cor_coluna, 4, cv2.LINE_AA)
 
@@ -880,7 +900,9 @@ class VisaoService:
                                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.CORES.get('vermelho', (0, 0, 255)), 2)"""
 
                             if track_id != -1:
-                                self._registrar_alerta_postura(camera_id, track_id, motivo_rotacao)
+                                self._registrar_alerta_postura(
+                                    camera_id, track_id, motivo_rotacao, tipo_deteccao='postura_rotacao'
+                                )
 
                         # --- AVALIAÇÃO DE QUEDA ---
                         is_caido, motivo_queda, _, _ = self._avaliar_postura(
@@ -895,41 +917,51 @@ class VisaoService:
                                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.CORES.get('vermelho', (0, 0, 255)), 2)"""
                             
                             if track_id != -1:
-                                self._registrar_alerta_postura(camera_id, track_id, motivo_queda, severidade=3)
+                                self._registrar_alerta_postura(
+                                    camera_id, track_id, motivo_queda, severidade=3, tipo_deteccao='queda'
+                                )
 
 
-    def _registrar_alerta_postura(self, camera_id: int, track_id: int, motivo: str, severidade: int = 1) -> None:
+    def _registrar_alerta_postura(self, camera_id: int, track_id: int, motivo: str,
+                                severidade: int = 1, *, tipo_deteccao: str) -> None:
         """
         Registra um alerta de má postura no banco de dados, evitando duplicidade por ID.
         """
 
+        if tipo_deteccao not in TIPOS_POSTURA:
+            raise ValueError('tipo_deteccao inválido para postura.')
+
         cache_chave = f"lock:alerta:postura:{camera_id}:{track_id}:{motivo}"
 
         # Evita alertas duplicados para o mesmo track_id e motivo dentro de um período de 30 segundos
-        if not self.redis_client.set(cache_chave, "1", ex=30, nx=True):
+        acquired = self.redis_client.set(cache_chave, "1", ex=30, nx=True)
+        trace_alert_candidate('postura', camera_id, None, motivo, track_id, acquired)
+        if not acquired:
             return
 
-        zonas = self._zonas_de_monitoramento(camera_id)
-
-        if not zonas:
-            return
-
-        zona_alvo = zonas[0]    
-        
-        setor = self.setores_repository.get_setor_por_id_camera(camera_id)
-        
-        if setor:
+        try:
+            setor = self.setores_repository.get_setor_por_id_camera(camera_id)
+            if not setor:
+                logger.warning('Câmera/setor inexistente ao registrar postura: %s.', camera_id)
+                return
             responsaveis = self.setores_repository.get_responsaveis_por_setor(setor.id)
             sucesso = self.alertas_service.criar_alerta(
-                monitoramento=zona_alvo,
+                monitoramento=None,
                 id_usuario=responsaveis[0] if responsaveis else None,
-                evento = motivo, 
+                evento=motivo,
                 severidade=severidade,
-                destinatarios=responsaveis
+                destinatarios=responsaveis,
+                tipo_deteccao=tipo_deteccao,
+                id_camera=camera_id
             )
 
             if sucesso:
                 print(f"⚠️ Má postura detectada - ID: {track_id}")
+        except psycopg2.Error as exc:
+            self.connection.rollback()
+            logger.warning('Falha ao registrar postura da câmera %s (SQLSTATE %s).', camera_id, exc.pgcode)
+        except (ValueError, redis.exceptions.RedisError) as exc:
+            logger.warning('Falha ao registrar/notificar postura da câmera %s: %s.', camera_id, exc)
 
 
     # ==================================================

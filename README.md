@@ -85,6 +85,20 @@ python -c "import secrets; print(secrets.token_hex(32))"
 ## Execução
 
 1. Certifique-se de que os serviços do PostgreSQL e do Redis estejam em execução.
+   No Windows, uma opção é iniciar o Docker Desktop e criar um Redis local:
+
+```powershell
+docker run -d --name spi-redis -p 127.0.0.1:6379:6379 redis:7-alpine
+```
+
+   Se o contêiner `spi-redis` já existir, use `docker start spi-redis`.
+   Valide com `docker exec spi-redis redis-cli ping` (deve retornar `PONG`)
+   e configure `REDIS_URL=redis://localhost:6379/0` no `.env`.
+   Instalar o pacote Python `redis` instala apenas o cliente; o servidor precisa
+   estar em execução separadamente. O erro `10061 connecting to localhost:6379`
+   indica que a conexão foi recusada nesse endereço. A inicialização via
+   `python app.py` verifica o Redis antes de abrir as câmeras.
+
 2. Inicie o servidor backend:
 
 ```bash

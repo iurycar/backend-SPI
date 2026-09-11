@@ -39,7 +39,7 @@ def parar_vision_workers():
     workers.clear()
 
 
-def get_camera_status(camera_id: int) -> dict:
+def get_camera_status(camera_id: int) -> str:
     """Retorna o status da câmera especificada."""
     worker = workers.get(camera_id)
 
