@@ -103,4 +103,4 @@ class CamerasService:
         if camera:
             return camera.rotacao, camera.espelhar_horizontal, camera.espelhar_vertical
 
-        return 0, False, Falsew
+        return 0, False, False
