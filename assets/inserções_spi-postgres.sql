@@ -23,12 +23,12 @@ INSERT INTO responsabilidade (id_usuario, id_setor) VALUES
 
 -- 4. POPULAR TABELA CAMERAS (Depende de setores)
 -- Câmera 1 e 2 no Setor 1, Câmera 3 no Setor 3
-INSERT INTO cameras (nome, ip, id_setor) VALUES
-('Fresa 1', 'rtsp://admin:SIDI2023@10.14.22.97:554/cam/realmonitor?channel=1&subtype=0', 1),
-('Fresa 2', 'rtsp://admin:SIDI2023@10.14.22.98:554/cam/realmonitor?channel=1&subtype=0', 1),
-('Tenda', 'rtsp://admin:SIDI2023@10.14.22.99:554/cam/realmonitor?channel=1&subtype=0', 2),
-('Sala 4', 'rtsp://admin:SIDI2023@10.14.24.6:554/cam/realmonitor?channel=1&subtype=0', 3),
-('SICK Visionary-B Two', 'rtsp://10.14.22.96:554/video', 4);
+INSERT INTO cameras (nome, ip, id_setor, rotacao, espelhar_horizontal, espelhar_vertical) VALUES
+('Fresa 1', 'rtsp://admin:SIDI2023@10.14.22.97:554/cam/realmonitor?channel=1&subtype=0', 1, 90, FALSE, FALSE),
+('Fresa 2', 'rtsp://admin:SIDI2023@10.14.22.98:554/cam/realmonitor?channel=1&subtype=0', 1, 90, FALSE, FALSE),
+('Tenda', 'rtsp://admin:SIDI2023@10.14.22.99:554/cam/realmonitor?channel=1&subtype=0', 2, 0, FALSE, FALSE),
+('Sala 4', 'rtsp://admin:SIDI2023@10.14.24.6:554/cam/realmonitor?channel=1&subtype=0', 3, 0, FALSE, FALSE),
+('SICK Visionary-B Two', 'rtsp://10.14.22.96:554/video', 4, 0, TRUE, FALSE);
 
 
 -- 5. POPULAR TABELA ZONAS (Depende de cameras)

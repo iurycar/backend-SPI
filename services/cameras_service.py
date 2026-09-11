@@ -78,14 +78,17 @@ class CamerasService:
             print(f"Erro ao criar CameraDTO: {e}")
             return None
 
-        camera = self.cameras_repository.atualizar_camera(camera_id, camera_dto.ip, camera_dto.id_setor, camera_dto.nome)
+        camera = self.cameras_repository.atualizar_camera(camera_id, camera_dto.ip, camera_dto.id_setor, camera_dto.nome, camera_dto.rotacao, camera_dto.espelhar_horizontal, camera_dto.espelhar_vertical)
 
         if camera:
             return {
                 'id': camera.id,
                 'nome': camera.nome,
                 'ip': camera.ip,
-                'id_setor': camera.id_setor
+                'id_setor': camera.id_setor,
+                'rotacao': camera.rotacao,
+                'espelhar_horizontal': camera.espelhar_horizontal,
+                'espelhar_vertical': camera.espelhar_vertical
             }
 
         return None
@@ -93,3 +96,11 @@ class CamerasService:
     def deletar_camera(self, camera_id: int) -> bool:
         successo = self.cameras_repository.deletar_camera(camera_id)
         return successo
+
+    def obter_transformacoes_camera(self, camera_id: int) -> tuple[int, bool, bool]:
+        camera = self.cameras_repository.get_camera_por_id(camera_id)
+
+        if camera:
+            return camera.rotacao, camera.espelhar_horizontal, camera.espelhar_vertical
+
+        return 0, False, Falsew

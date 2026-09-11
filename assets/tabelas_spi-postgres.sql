@@ -53,6 +53,9 @@ CREATE TABLE cameras (
     id_camera       INTEGER      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     nome            VARCHAR(45),
     ip              VARCHAR(255) UNIQUE,
+    rotacao         INTEGER      NOT NULL DEFAULT 0,
+    espelhar_horizontal BOOLEAN   NOT NULL DEFAULT FALSE,
+    espelhar_vertical   BOOLEAN   NOT NULL DEFAULT FALSE,
     id_setor        INTEGER      NOT NULL REFERENCES setores(id_setor) ON DELETE CASCADE
 );
 
