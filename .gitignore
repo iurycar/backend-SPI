@@ -29,8 +29,10 @@ numerador.py
 __pycache__
 assets/modelo/active_learning/dataset_captura/images
 assets/modelo/active_learning/dataset_captura/labels
-assets/modelo/active_learning/dataset_tratado/images
-assets/modelo/active_learning/dataset_tratado/labels
+assets/modelo/active_learning/dataset_tratado/train/images
+assets/modelo/active_learning/dataset_tratado/train/labels
+assets/modelo/active_learning/dataset_tratado/val/images
+assets/modelo/active_learning/dataset_tratado/val/labels
 PLANO_INTEGRACAO_BACKEND.md
 RELATORIO_IMPLEMENTACAO_BACKEND.md
 assets/alarme-esp32/
