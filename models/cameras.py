@@ -6,3 +6,6 @@ class Camera:
     nome: str | None
     ip: str
     id_setor: int
+    rotacao: int = 0
+    espelhar_horizontal: bool = False
+    espelhar_vertical: bool = False
