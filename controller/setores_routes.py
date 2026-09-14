@@ -1,5 +1,6 @@
-from flask import Blueprint, jsonify, request, session
+from core.auth import login_required, perfil_required
 from services.setores_service import SetoresService
+from flask import Blueprint, jsonify, request
 
 setores_bp = Blueprint('setores', __name__)
 
@@ -7,11 +8,13 @@ def create_setores_bp(connection):
     setores_service = SetoresService(connection)
 
     @setores_bp.route('/setores', methods=['GET'])
+    @login_required
     def listar_setores():
         setores = setores_service.listar_setores()
         return jsonify(setores), 200
 
     @setores_bp.route('/setores/<int:setor_id>', methods=['GET'])
+    @login_required
     def obter_setor_por_id(setor_id):
         setor = setores_service.obter_setor_por_id(setor_id)
         if setor:
@@ -20,11 +23,13 @@ def create_setores_bp(connection):
             return jsonify({'message': 'Setor não encontrado'}), 404
 
     @setores_bp.route('/setores/responsavel/<int:usuario_id>', methods=['GET'])
+    @login_required
     def listar_setores_por_responsavel(usuario_id):
         setores = setores_service.listar_setores_por_id_responsavel(usuario_id)
         return jsonify(setores), 200
 
     @setores_bp.route('/setores/registrar', methods=['POST'])
+    @perfil_required('admin', 'supervisor')
     def registrar_setor():
         data = request.get_json()
         setor = setores_service.registrar_setor(data)
@@ -35,6 +40,7 @@ def create_setores_bp(connection):
             return jsonify({'message': 'Falha ao registrar o setor'}), 400
 
     @setores_bp.route('/setores/<int:setor_id>', methods=['PUT'])
+    @perfil_required('admin', 'supervisor')
     def atualizar_setor(setor_id):
         data = request.get_json()
         setor = setores_service.atualizar_setor(setor_id, data)
@@ -45,6 +51,7 @@ def create_setores_bp(connection):
             return jsonify({'message': 'Falha ao atualizar o setor'}), 400
 
     @setores_bp.route('/setores/<int:setor_id>', methods=['DELETE'])
+    @perfil_required('admin', 'supervisor')
     def deletar_setor(setor_id):
         sucesso = setores_service.deletar_setor(setor_id)
 

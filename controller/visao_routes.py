@@ -1,5 +1,6 @@
-from flask import Blueprint, Response, jsonify, request
 from core.vision_metrics import empty_detection_snapshot
+from flask import Blueprint, Response, jsonify, request
+from core.auth import login_required, perfil_required
 from worker.vision_manager import workers
 import time
 import os
@@ -12,6 +13,7 @@ def create_visao_bp(connection):
     @visao_bp.route('/video', defaults={'camera_id': 1}, methods=['GET'])
     @visao_bp.route('/video/', defaults={'camera_id': 1}, methods=['GET'])
     @visao_bp.route('/video/<int:camera_id>', methods=['GET'])
+    @login_required
     def video(camera_id=1):
         worker = workers.get(camera_id)
 
@@ -33,6 +35,7 @@ def create_visao_bp(connection):
         return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
     @visao_bp.route('/detections/<int:camera_id>', methods=['GET'])
+    @login_required
     def detections(camera_id):
         worker = workers.get(camera_id)
         if worker is None:
@@ -42,6 +45,7 @@ def create_visao_bp(connection):
         return jsonify(worker.get_detection_snapshot(camera_id)), 200
 
     @visao_bp.route('/active-learning/toggle', methods=['POST'])
+    @perfil_required('admin', 'supervisor')
     def toggle_active_learning():
         """
         Ativa ou desativa a captura de Active Learning.
@@ -68,10 +72,11 @@ def create_visao_bp(connection):
         return jsonify({"message": msg, "enabled": enabled}), 200
 
     @visao_bp.route('/video/lote/<int:tamanho_lote>', methods=['POST'])
+    @perfil_required('admin', 'supervisor')
     def modificar_tamanho_lote(tamanho_lote):
         """
-        Modifica o tamanho do lote de câmeras processadas por cada worker.
-        Corpo da requisição (JSON): {"tamanho_lote": 2}
+            Modifica o tamanho do lote de câmeras processadas por cada worker.
+            Corpo da requisição (JSON): {"tamanho_lote": 2}
         """
         if tamanho_lote < 1:
             return jsonify({"message": "O tamanho do lote deve ser pelo menos 1."}), 400

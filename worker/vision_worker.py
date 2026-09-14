@@ -78,10 +78,6 @@ class VisionWorker:
         if self.process is not None and self.process.is_alive():
             self.process.join(timeout=3)
 
-<<<<<<< HEAD
-
-=======
->>>>>>> cdb9856966fdaf4502b4e8b8458ae704eaf9996f
     @staticmethod
     def _run_batch(cameras, frame_queues, last_results, stop_event, reload_zones_events) -> None:
         try:

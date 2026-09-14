@@ -125,27 +125,31 @@ class AlertasRepository:
             return valores
 
     def get_contagem_por_periodo(self, desde) -> list[dict]:
-        with self.conn.cursor() as cursor:
-            query = """
-                SELECT DATE(a.data_hora) AS dia, COUNT(*) AS total
-                FROM alertas a
-                WHERE a.data_hora >= %s
-                GROUP BY DATE(a.data_hora)
-                ORDER BY dia ASC;
-            """
+        try:
+            with self.conn.cursor() as cursor:
+                query = """
+                    SELECT DATE(a.data_hora) AS dia, COUNT(*) AS total
+                    FROM alertas a
+                    WHERE a.data_hora >= %s
+                    GROUP BY DATE(a.data_hora)
+                    ORDER BY dia ASC;
+                """
 
-            cursor.execute(query, (desde,))
-            resultados = cursor.fetchall()
+                cursor.execute(query, (desde,))
+                resultados = cursor.fetchall()
 
-            valores: list[dict] = []
+                valores: list[dict] = []
 
-            for dia, total in resultados:
-                valores.append({
-                    "dia": dia.strftime("%Y-%m-%d"),
-                    "total": total
-                })
+                for dia, total in resultados:
+                    valores.append({
+                        "dia": dia.strftime("%Y-%m-%d"),
+                        "total": total
+                    })
 
-            return valores
+                return valores
+        except psycopg2.Error:
+            self.conn.rollback()
+            raise
 
     def get_monitoramento_por_id_alerta(self, id_alerta: int) -> dict | None:
         with self.conn.cursor() as cursor:
