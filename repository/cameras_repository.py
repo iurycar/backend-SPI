@@ -19,7 +19,10 @@ class CamerasRepository:
                         id=camera[0],
                         nome=camera[1],
                         ip=camera[2],
-                        id_setor=camera[3]
+                        rotacao=camera[3],
+                        espelhar_horizontal=camera[4],
+                        espelhar_vertical=camera[5],
+                        id_setor=camera[6]
                     ))
 
                 return cameras_lista
@@ -36,10 +39,10 @@ class CamerasRepository:
                     id=camera[0],
                     nome=camera[1],
                     ip=camera[2],
-                    id_setor=camera[3],
-                    rotacao=camera[4],
-                    espelhar_horizontal=camera[5],
-                    espelhar_vertical=camera[6]
+                    rotacao=camera[3],
+                    espelhar_horizontal=camera[4],
+                    espelhar_vertical=camera[5],
+                    id_setor=camera[6]
                 )
 
             return None
@@ -57,7 +60,10 @@ class CamerasRepository:
                         id=camera[0],
                         nome=camera[1],
                         ip=camera[2],
-                        id_setor=camera[3]
+                        rotacao=camera[3],
+                        espelhar_horizontal=camera[4],
+                        espelhar_vertical=camera[5],
+                        id_setor=camera[6]
                     ))
 
                 return cameras_lista
@@ -85,7 +91,10 @@ class CamerasRepository:
                         id=camera[0],
                         nome=camera[1],
                         ip=camera[2],
-                        id_setor=camera[3]
+                        rotacao=camera[3],
+                        espelhar_horizontal=camera[4],
+                        espelhar_vertical=camera[5],
+                        id_setor=camera[6]
                     )
 
             except Exception as e:
@@ -115,7 +124,10 @@ class CamerasRepository:
                         id=camera[0],
                         nome=camera[1],
                         ip=camera[2],
-                        id_setor=camera[3]
+                        rotacao=camera[3],
+                        espelhar_horizontal=camera[4],
+                        espelhar_vertical=camera[5],
+                        id_setor=camera[6]
                     )
 
             except Exception as e:
