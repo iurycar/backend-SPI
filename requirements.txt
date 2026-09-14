@@ -12,3 +12,5 @@ rq
 simple-websocket
 flask-session
 paho-mqtt
+pyyaml
+albumentations
