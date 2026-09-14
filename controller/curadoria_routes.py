@@ -104,6 +104,6 @@ def salvar_e_mover():
 
 @curadoria_bp.route('/api/sample/<base_name>', methods=['DELETE'])
 @login_required
-def deletar_amostra(base_name):
+def deletar_imagem(base_name):
     resultado = curadoria_service.deletar_imagem(base_name)
     return jsonify(resultado)
