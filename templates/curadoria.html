@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <title>Curadoria & Anotação de EPIs</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class'
+        }
+    </script>
+    <style>
+        #canvasContainer { position: relative; display: inline-block; }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: none; border-radius: 9999px; }
+    </style>
+</head>
+<body class="bg-neutral-100 dark:bg-black text-neutral-800 dark:text-neutral-100 min-h-screen flex flex-col font-sans select-none overflow-hidden transition-colors">
+
+    <!-- Topbar -->
+    <header class="bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800 px-6 py-2.5 flex justify-between items-center z-10 shadow-sm flex-shrink-0">
+        <div class="flex items-center gap-3">
+            <span class="w-3 h-3 bg-neutral-400 dark:bg-neutral-300 rounded-full animate-pulse"></span>
+            <h1 class="text-sm font-bold tracking-wide text-neutral-900 dark:text-white uppercase">Curadoria de Active Learning</h1>
+        </div>
+
+        <!-- Seletor de Intervalo com Carregamento Sob Demanda -->
+        <div class="flex items-center gap-3 bg-neutral-50 dark:bg-neutral-950 px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-xs">
+            <span class="text-neutral-500 dark:text-neutral-400 font-medium">Total no disco: <strong id="totalPhotosCount" class="text-neutral-900 dark:text-neutral-200 font-mono">0</strong></span>
+            <span class="text-neutral-300 dark:text-neutral-700">|</span>
+            <div class="flex items-center gap-1.5">
+                <label class="text-neutral-500 dark:text-neutral-400 font-semibold">De:</label>
+                <input type="number" id="inputRangeStart" min="1" class="w-16 bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 rounded px-2 py-0.5 text-center text-neutral-900 dark:text-neutral-200 font-mono focus:border-neutral-500 focus:outline-none" placeholder="1">
+            </div>
+            <div class="flex items-center gap-1.5">
+                <label class="text-neutral-500 dark:text-neutral-400 font-semibold">Até:</label>
+                <input type="number" id="inputRangeEnd" min="1" class="w-16 bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 rounded px-2 py-0.5 text-center text-neutral-900 dark:text-neutral-200 font-mono focus:border-neutral-500 focus:outline-none" placeholder="100">
+            </div>
+            <button id="btnApplyRange" class="px-3 py-1 bg-neutral-800 hover:bg-neutral-700 dark:bg-neutral-200 dark:hover:bg-white text-white dark:text-black font-semibold rounded transition shadow flex items-center gap-1">
+                📥 Carregar Lote
+            </button>
+        </div>
+        
+        <div class="flex items-center gap-3">
+            <div id="counter" class="text-xs font-semibold bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 px-4 py-1.5 rounded-full text-neutral-600 dark:text-neutral-300">
+                Aguardando seleção...
+            </div>
+            <button id="btnThemeToggle" class="px-3 py-1.5 bg-neutral-200 hover:bg-neutral-300 dark:bg-neutral-800 dark:hover:bg-neutral-700 border border-neutral-300 dark:border-neutral-700 rounded-lg text-xs font-medium text-neutral-700 dark:text-neutral-300 transition flex items-center gap-1.5">
+                🌓 <span id="themeToggleText">Tema</span>
+            </button>
+            <button id="btnOpenConfig" class="px-3 py-1.5 bg-neutral-200 hover:bg-neutral-300 dark:bg-neutral-800 dark:hover:bg-neutral-700 border border-neutral-300 dark:border-neutral-700 rounded-lg text-xs font-medium text-neutral-700 dark:text-neutral-300 transition flex items-center gap-1.5">
+                📁 Pastas
+            </button>
+        </div>
+    </header>
+
+    <!-- Modal de Configuração de Pastas -->
+    <div id="configModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl max-w-xl w-full p-6 shadow-2xl space-y-4">
+            <div class="flex justify-between items-center border-b border-neutral-100 dark:border-neutral-800 pb-3">
+                <h3 class="text-sm font-bold text-neutral-800 dark:text-neutral-200 uppercase tracking-wider">Configurar Pastas de Trabalho</h3>
+                <button id="btnCloseConfig" class="text-neutral-400 hover:text-neutral-900 dark:hover:text-white">✕</button>
+            </div>
+            
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block text-neutral-600 dark:text-neutral-400 mb-1 font-semibold">Diretório de Origem (contém subpastas /images e /labels):</label>
+                    <input type="text" id="inputSourceDir" class="w-full bg-neutral-50 dark:bg-neutral-950 border border-neutral-300 dark:border-neutral-700 rounded-lg px-3 py-2 text-neutral-900 dark:text-neutral-200 font-mono focus:border-neutral-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-neutral-600 dark:text-neutral-400 mb-1 font-semibold">Diretório de Destino (onde serão salvas as revisadas):</label>
+                    <input type="text" id="inputTargetDir" class="w-full bg-neutral-50 dark:bg-neutral-950 border border-neutral-300 dark:border-neutral-700 rounded-lg px-3 py-2 text-neutral-900 dark:text-neutral-200 font-mono focus:border-neutral-500 focus:outline-none">
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-2">
+                <button id="btnCancelConfig" class="px-4 py-2 bg-neutral-200 hover:bg-neutral-300 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-300 rounded-lg text-xs font-semibold">Cancelar</button>
+                <button id="btnSaveConfig" class="px-5 py-2 bg-neutral-900 hover:bg-neutral-800 dark:bg-white dark:hover:bg-neutral-200 text-white dark:text-black rounded-lg text-xs font-semibold shadow">Salvar & Carregar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Interface Principal -->
+    <div class="flex-1 flex overflow-hidden">
+        
+        <!-- Menu Lateral Esquerdo: Classes / Desenho -->
+        <aside class="w-64 bg-white dark:bg-neutral-900 border-r border-neutral-200 dark:border-neutral-800 flex flex-col flex-shrink-0">
+            <div class="p-4 border-b border-neutral-200 dark:border-neutral-800">
+                <h2 class="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">Ferramentas de Desenho</h2>
+                <p class="text-[11px] text-neutral-500 mt-1">Selecione uma classe para desenhar ou selecione para mover/redimensionar.</p>
+            </div>
+            
+            <div class="p-3">
+                <button id="btnCursorMode" class="w-full py-2 px-3 rounded-lg border text-xs font-semibold flex items-center justify-between transition bg-neutral-200 dark:bg-neutral-800 border-neutral-400 dark:border-neutral-600 text-neutral-900 dark:text-white mb-2">
+                    <span>↖ Selecionar | Redimensionar</span>
+                </button>
+            </div>
+
+            <div class="px-4 pb-2 flex justify-between items-center">
+                <span class="text-[10px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Classes & Cores</span>
+            </div>
+            <div id="classList" class="flex-1 overflow-y-auto px-3 space-y-1.5 pb-4"></div>
+        </aside>
+
+        <!-- Canvas Central -->
+            <main class="flex-1 flex flex-col p-3 overflow-hidden items-center justify-between bg-neutral-100 dark:bg-black min-h-0 select-none">
+        
+                <!-- 1. Topo: Zoom & Pan -->
+                <div class="flex items-center gap-2 mb-2 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 px-3 py-1.5 rounded-lg shadow-sm flex-shrink-0 z-10">
+                    <button id="btnZoomOut" class="px-2.5 py-1 bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 text-xs font-bold rounded transition">🔍 -</button>
+                    <span id="zoomLevelDisplay" class="text-xs font-mono text-neutral-600 dark:text-neutral-400 min-w-[48px] text-center">100%</span>
+                    <button id="btnZoomIn" class="px-2.5 py-1 bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 text-xs font-bold rounded transition">🔍 +</button>
+                    <span class="text-neutral-300 dark:text-neutral-700">|</span>
+                    <button id="btnFitScreen" class="px-3 py-1 bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 text-xs font-semibold rounded transition">⛶ Ajustar</button>
+                    <button id="btnResetZoom" class="px-3 py-1 bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 text-xs font-semibold rounded transition">1:1</button>
+                    <span class="text-neutral-300 dark:text-neutral-700">|</span>
+                    <button id="btnPanTool" title="Mover Imagem (Segure Espaço)" class="px-3 py-1 bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 text-xs font-semibold rounded transition flex items-center gap-1">
+                        ✋ <span>Mover</span>
+                    </button>
+                </div>
+
+                <!-- 2. Meio -->
+                <div id="viewportWrapper" class="relative flex-1 w-full min-h-0 overflow-hidden select-none p-1">
+                    <canvas id="viewport" class="absolute inset-0 block w-full h-full cursor-default rounded-xl border border-neutral-300 dark:border-neutral-800 bg-neutral-950 shadow-2xl"></canvas>
+                </div>
+
+                <!-- 3. Base: Barra Inferior presa na parte inferior pelo justify-between -->
+                <div class="flex items-center justify-between w-full max-w-5xl mt-2 px-2 flex-shrink-0 z-10">
+                    <button id="btnPrev" class="h-9 px-3.5 bg-neutral-200 hover:bg-neutral-300 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 shadow-sm">
+                        ◀ Anterior
+                    </button>
+
+                    <div class="flex items-center gap-2">
+                        <!-- Toggle Auto Split -->
+                        <label class="h-9 flex items-center gap-2 px-3 bg-neutral-200 dark:bg-neutral-800/80 rounded-lg border border-neutral-300 dark:border-neutral-700 text-xs font-medium cursor-pointer select-none whitespace-nowrap">
+                            <input type="checkbox" id="chkAutoValidation" class="w-3.5 h-3.5 rounded text-emerald-600 focus:ring-0 cursor-pointer">
+                            <span class="text-neutral-700 dark:text-neutral-300">Auto Split (20%)</span>
+                        </label>
+
+                        <!-- Seletor Manual (Treino / Validação) -->
+                        <div id="manualSplitSelector" class="flex h-9 items-center bg-neutral-200 dark:bg-neutral-800 p-1 rounded-lg border border-neutral-300 dark:border-neutral-700 text-xs font-medium">
+                            <button id="btnSelectTrain" type="button" class="h-full px-2.5 rounded-md bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white text-xs font-semibold shadow-sm transition">
+                                Treino
+                            </button>
+                            <button id="btnSelectVal" type="button" class="h-full px-2.5 rounded-md text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white text-xs transition">
+                                Validação
+                            </button>
+                        </div>
+
+                        <span class="h-5 w-[1px] bg-neutral-300 dark:bg-neutral-700 mx-1"></span>
+
+                        <button id="btnDescartarAmostra" class="h-9 px-3 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 dark:hover:bg-rose-900/50 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50 rounded-lg text-xs font-medium transition whitespace-nowrap">Descartar</button>
+                        <button id="btnSalvarAvancar" class="h-9 px-3.5 bg-neutral-800 hover:bg-neutral-700 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-white rounded-lg text-xs font-semibold transition shadow-sm whitespace-nowrap">Salvar ▶</button>
+                        <button id="btnSalvarComAugment" class="h-9 px-3.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold transition shadow-sm whitespace-nowrap flex items-center gap-1.5">
+                            <span>✨ Salvar + Augment</span>
+                        </button>
+                    </div>
+
+                    <button id="btnNext" class="h-9 px-3.5 bg-neutral-200 hover:bg-neutral-300 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 shadow-sm">
+                        Próximo ▶
+                    </button>
+                </div>
+            </main>
+
+        <!-- Menu Lateral Direito: Detecções com Troca de Classe e Exclusão -->
+        <aside class="w-80 bg-white dark:bg-neutral-900 border-l border-neutral-200 dark:border-neutral-800 flex flex-col flex-shrink-0">
+            <div class="p-4 border-b border-neutral-200 dark:border-neutral-800">
+                <h2 class="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">Detecções no Frame</h2>
+                <span id="detCount" class="text-[11px] text-neutral-500">0 objetos</span>
+            </div>
+            
+            <!-- Painel Lateral Direito: Detecções com Paginação Fixa -->
+            <div class="flex-1 flex flex-col min-h-0 overflow-hidden">
+                <!-- Lista rolante caso precise, mas limitada pela página -->
+                <div id="detectionsList" class="flex-1 overflow-y-auto space-y-2 pr-1 min-h-0">
+                    <!-- Itens inseridos dinamicamente -->
+                </div>
+
+                <!-- Controles de Paginação das Detecções -->
+                <div id="detectionsPagination" class="hidden items-center justify-between pt-2 mt-2 border-t border-neutral-200 dark:border-neutral-800 text-xs flex-shrink-0">
+                    <button id="btnDetectionsPrev" type="button" class="px-2.5 py-1 bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 rounded text-neutral-700 dark:text-neutral-300 font-semibold transition disabled:opacity-30 disabled:cursor-not-allowed">
+                        ◀ Anterior
+                    </button>
+                    <span id="detectionsPageIndicator" class="text-neutral-500 font-mono text-[11px]">1 / 1</span>
+                    <button id="btnDetectionsNext" type="button" class="px-2.5 py-1 bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 rounded text-neutral-700 dark:text-neutral-300 font-semibold transition disabled:opacity-30 disabled:cursor-not-allowed">
+                        Próximo ▶
+                    </button>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <script type="module" src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

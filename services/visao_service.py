@@ -582,7 +582,7 @@ class VisaoService:
         if not frames:
             return [], []
 
-        results_objects = self.modelo.track(frames, persist=True, conf=0.5, iou=0.4, tracker="bytetrack.yaml", verbose=False)
+        results_objects = self.modelo.track(frames, persist=True, conf=0.3, iou=0.4, tracker="bytetrack.yaml", verbose=False)
 
         batch_detections = []
         batch_class_count = []
@@ -606,48 +606,53 @@ class VisaoService:
                     cls = int(box.cls[0]) # Obtém a classe do objeto detectado
                     conf = float(box.conf[0]) # Obtém a confiança da detecção
 
-                    # Obtém o ID do objeto rastreado (track_id) e o nome da classe (label_name)
-                    track_id = int(box.id[0]) if box.id is not None else -1
-                    label_name = self.modelo.names[cls].lower()
 
-                    zonas_do_objeto = [] # Lista para armazenar os IDs das zonas em que o objeto foi detectado
+                    # Desenha a caixa delimitadora somente se a confiança for maior ou igual a 0.5
+                    if conf >= 0.5:
+                        # Obtém o ID do objeto rastreado (track_id) e o nome da classe (label_name)
+                        track_id = int(box.id[0]) if box.id is not None else -1
+                        label_name = self.modelo.names[cls].lower()
 
-                    # Itera sobre as zonas configuradas para verificar se o objeto está dentro de alguma delas
-                    for monitoramento in zonas_configuradas:
-                        regiao_px = self.regiao_para_pixels(monitoramento.regiao, img_largura, img_altura)
-                        if self._caixas_intersectam(xyxy, self.regiao_para_caixa(regiao_px)):
+                        zonas_do_objeto = [] # Lista para armazenar os IDs das zonas em que o objeto foi detectado
 
-                            # Verifica se o objeto é requisitado na zona
-                            if self._zona_requer_classe(monitoramento.epis_categoria, self._classe_epi_por_label(label_name), monitoramento.permitido):
-                                zonas_do_objeto.append(monitoramento.id)
+                        # Itera sobre as zonas configuradas para verificar se o objeto está dentro de alguma delas
+                        for monitoramento in zonas_configuradas:
+                            regiao_px = self.regiao_para_pixels(monitoramento.regiao, img_largura, img_altura)
+                            if self._caixas_intersectam(xyxy, self.regiao_para_caixa(regiao_px)):
 
-                                # Verifica se o objeto é 'com_...' ou 'sem_...' e se está dentro da zona que requer o EPI correspondente
-                                if label_name.startswith("sem_"):
-                                    self._desenhar_caixa_delimitadora(frame, xyxy, f"{label_name}", self.CORES.get('vermelho', (0, 0, 255)))
-                                    self._registrar_alerta_epi_incorreto(monitoramento, f"Sem EPI necessário: {self._classe_epi_por_label(label_name)}", track_id, severidade=2)
-                                else:
-                                    # Verifica se o objeto é normal, caso seja desenha a caixa delimitadora em amarelo e registra o alerta de EPI incorreto
-                                    if label_name.endswith("_normal"):
-                                        self._desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')}", self.CORES.get('amarelo', (0, 255, 255)))
-                                        self._registrar_alerta_epi_incorreto(monitoramento, f"Equipamento inadequado: {self._classe_epi_por_label(label_name)}", track_id, severidade=1)
+                                # Verifica se o objeto é requisitado na zona
+                                if self._zona_requer_classe(monitoramento.epis_categoria, self._classe_epi_por_label(label_name), monitoramento.permitido):
+                                    zonas_do_objeto.append(monitoramento.id)
+
+                                    # Verifica se o objeto é 'com_...' ou 'sem_...' e se está dentro da zona que requer o EPI correspondente
+                                    if label_name.startswith("sem_"):
+                                        self._desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')}", self.CORES.get('vermelho', (0, 0, 255)))
+                                        self._registrar_alerta_epi_incorreto(monitoramento, f"Sem EPI necessário: {self._classe_epi_por_label(label_name)}", track_id, severidade=2)
                                     else:
-                                        self._desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')}", self.CORES.get('verde', (0, 255, 255)))
-                                                
-                            # Verifica se o objeto é 'pessoa' e se está dentro da zona que não permite pessoas
-                            if label_name == "pessoa" and not self._zona_requer_classe(monitoramento.epis_categoria, "pessoa", monitoramento.permitido):
-                                self._desenhar_caixa_delimitadora(frame, xyxy, f"{label_name} ID:{track_id} (Zona Restrita)", self.CORES.get('vermelho', (0, 0, 255)))
-                                self._registrar_alerta_epi_incorreto(monitoramento, "Pessoa em zona restrita", track_id, severidade=3)
-                    
-                    class_count[label_name] += 1
+                                        # Verifica se o objeto é normal, caso seja desenha a caixa delimitadora em amarelo e registra o alerta de EPI incorreto
+                                        if label_name.endswith("_normal"):
+                                            self._desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')}", self.CORES.get('amarelo', (0, 255, 255)))
+                                            self._registrar_alerta_epi_incorreto(monitoramento, f"Equipamento inadequado: {self._classe_epi_por_label(label_name)}", track_id, severidade=1)
+                                        else:
+                                            self._desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')}", self.CORES.get('verde', (0, 255, 255)))
+                                                    
+                                # Verifica se o objeto é 'pessoa' e se está dentro da zona que não permite pessoas
+                                if label_name == "pessoa" and not self._zona_requer_classe(monitoramento.epis_categoria, "pessoa", monitoramento.permitido):
+                                    self._desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize()} ID:{track_id} (Zona Restrita)", self.CORES.get('vermelho', (0, 0, 255)))
+                                    self._registrar_alerta_epi_incorreto(monitoramento, "Pessoa em zona restrita", track_id, severidade=3)
+                                elif label_name == "pessoa":
+                                    self._desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize()} ID:{track_id}", self.CORES.get('branco', (0, 255, 0)))
+                        
+                        class_count[label_name] += 1
 
-                    # Adiciona a detecção à lista de detecções, associando-a às zonas em que o objeto foi detectado
-                    for z_id in zonas_do_objeto:
-                        detections.append({
-                            "id": track_id,
-                            "label": label_name,
-                            "confidence": conf,
-                            "zona": z_id
-                        })
+                        # Adiciona a detecção à lista de detecções, associando-a às zonas em que o objeto foi detectado
+                        for z_id in zonas_do_objeto:
+                            detections.append({
+                                "id": track_id,
+                                "label": label_name,
+                                "confidence": conf,
+                                "zona": z_id
+                            })
 
             batch_detections.append(detections)
             batch_class_count.append(class_count)
