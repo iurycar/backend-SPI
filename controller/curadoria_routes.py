@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, request, render_template, send_file, session
 from services.curadoria_service import CuradoriaService
 from core.auth import login_required, perfil_required
+from schemas.config_dto import ConfigDTO
 import os
 
 curadoria_service = CuradoriaService()
@@ -18,9 +19,15 @@ def index():
 def gerenciar_config():
     if request.method == 'POST':
         dados = request.json or {}
-        return jsonify(curadoria_service.atualizar_configuracao(dados))
-    print(f"Obtendo configuração atual: {curadoria_service.obter_configuracao()}")
+        if not dados:
+            return jsonify({"error": "Dados inválidos"}), 400
 
+        try:
+            config = ConfigDTO.from_dict(dados)
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+
+        return jsonify(curadoria_service.atualizar_configuracao(config))
     return jsonify(curadoria_service.obter_configuracao())
 
 
@@ -98,5 +105,5 @@ def salvar_e_mover():
 @curadoria_bp.route('/api/sample/<base_name>', methods=['DELETE'])
 @login_required
 def deletar_amostra(base_name):
-    resultado = curadoria_service.deletar_amostra(base_name)
+    resultado = curadoria_service.deletar_imagem(base_name)
     return jsonify(resultado)
