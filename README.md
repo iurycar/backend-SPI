@@ -32,7 +32,7 @@ O backend é estruturado em uma arquitetura em camadas (Controller, Service, Rep
 
 - Python 3.10 ou superior.
 - PostgreSQL 12 ou superior.
-- Redis Server.
+- Redis (Linux) / Memurai (Windows).
 - Mosquitto MQTT Broker (caso utilize integração com alarme físico ESP32).
 - Dependências descritas no arquivo `requirements.txt`.
 
@@ -84,7 +84,8 @@ python -c "import secrets; print(secrets.token_hex(32))"
 
 ## Execução
 
-1. Certifique-se de que os serviços do PostgreSQL e do Redis estejam em execução.
+1. Certifique-se de que os serviços do PostgreSQL e do Redis/Memurai estejam em execução.
+
 2. Inicie o servidor backend:
 
 ```bash

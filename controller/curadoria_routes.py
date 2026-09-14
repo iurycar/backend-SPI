@@ -1,5 +1,7 @@
-from flask import Blueprint, jsonify, request, render_template, send_file
+from flask import Blueprint, jsonify, request, render_template, send_file, session
 from services.curadoria_service import CuradoriaService
+from core.auth import login_required, perfil_required
+from schemas.config_dto import ConfigDTO
 import os
 
 curadoria_service = CuradoriaService()
@@ -7,29 +9,44 @@ curadoria_service = CuradoriaService()
 curadoria_bp = Blueprint('curadoria', __name__)
 
 @curadoria_bp.route('/curadoria')
+@login_required
 def index():
     return render_template('curadoria.html')
 
+
 @curadoria_bp.route('/api/config', methods=['GET', 'POST'])
+@login_required
 def gerenciar_config():
     if request.method == 'POST':
         dados = request.json or {}
-        return jsonify(curadoria_service.atualizar_configuracao(dados))
-    print(f"Obtendo configuração atual: {curadoria_service.obter_configuracao()}")
+        if not dados:
+            return jsonify({"error": "Dados inválidos"}), 400
 
+        try:
+            config = ConfigDTO.from_dict(dados)
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+
+        return jsonify(curadoria_service.atualizar_configuracao(config))
     return jsonify(curadoria_service.obter_configuracao())
 
+
 @curadoria_bp.route('/api/classes', methods=['GET'])
+@login_required
 def obter_classes():
     classes = curadoria_service.obter_classes()
     return jsonify(classes)
 
+
 @curadoria_bp.route('/api/samples/count', methods=['GET'])
+@login_required
 def obter_imagens_total():
     total = curadoria_service.obter_imagens_total()
     return jsonify({"total": total})
 
+
 @curadoria_bp.route('/api/samples', methods=['GET'])
+@login_required
 def obter_imagens():
     inicio = request.args.get('start', default=0, type=int)
     fim = request.args.get('end', default=100, type=int)
@@ -41,7 +58,9 @@ def obter_imagens():
 
     return jsonify(imagens)
 
+
 @curadoria_bp.route('/api/image/<filename>', methods=['GET'])
+@login_required
 def obter_imagem(filename):
     caminho_imagem = curadoria_service.obter_imagem(filename)
 
@@ -50,12 +69,16 @@ def obter_imagem(filename):
 
     return send_file(caminho_imagem, mimetype='image/jpeg', max_age=86400)
 
+
 @curadoria_bp.route('/api/labels/<filename>', methods=['GET'])
+@login_required
 def obter_labels(filename):
     boxes = curadoria_service.obter_labels(filename)
     return jsonify(boxes)
 
+
 @curadoria_bp.route('/api/save-and-move', methods=['POST'])
+@login_required
 def salvar_e_mover():
     dados = request.json or {}
     nome_base = dados.get('id')
@@ -78,7 +101,9 @@ def salvar_e_mover():
 
     return jsonify(resultado)
 
+
 @curadoria_bp.route('/api/sample/<base_name>', methods=['DELETE'])
-def deletar_amostra(base_name):
-    resultado = curadoria_service.deletar_amostra(base_name)
+@login_required
+def deletar_imagem(base_name):
+    resultado = curadoria_service.deletar_imagem(base_name)
     return jsonify(resultado)

@@ -1,5 +1,6 @@
+from core.vision_metrics import empty_detection_snapshot
 from flask import Blueprint, Response, jsonify, request
-from services.visao_service import VisaoService
+from core.auth import login_required, perfil_required
 from worker.vision_manager import workers
 import time
 import os
@@ -8,11 +9,11 @@ visao_bp = Blueprint('visao', __name__)
 
 
 def create_visao_bp(connection):
-    visao_service = VisaoService(connection)
 
     @visao_bp.route('/video', defaults={'camera_id': 1}, methods=['GET'])
     @visao_bp.route('/video/', defaults={'camera_id': 1}, methods=['GET'])
     @visao_bp.route('/video/<int:camera_id>', methods=['GET'])
+    @login_required
     def video(camera_id=1):
         worker = workers.get(camera_id)
 
@@ -34,27 +35,17 @@ def create_visao_bp(connection):
         return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
     @visao_bp.route('/detections/<int:camera_id>', methods=['GET'])
+    @login_required
     def detections(camera_id):
-        if workers:
-            worker = workers.get(camera_id)
-
-            if worker is None:
-                return jsonify({"message": f"Worker para a câmera {camera_id} não está em execução."}), 503
-
-            # Busca o dicionário específico daquela câmera no lote
-            cam_data = worker.last_results.get(camera_id, {})
-
-            dados = {
-                "detections": cam_data.get('detections', []),
-                "class_count": cam_data.get('class_count', {}),
-                "connected": cam_data.get('connected', False),
-            }
-
-            return jsonify(dados), 200
-        
-        return jsonify({"detections": [], "zonas": []}), 200
+        worker = workers.get(camera_id)
+        if worker is None:
+            dados = empty_detection_snapshot()
+            dados['message'] = f'Worker para a câmera {camera_id} não está em execução.'
+            return jsonify(dados), 503
+        return jsonify(worker.get_detection_snapshot(camera_id)), 200
 
     @visao_bp.route('/active-learning/toggle', methods=['POST'])
+    @perfil_required('admin', 'supervisor')
     def toggle_active_learning():
         """
         Ativa ou desativa a captura de Active Learning.
@@ -81,10 +72,11 @@ def create_visao_bp(connection):
         return jsonify({"message": msg, "enabled": enabled}), 200
 
     @visao_bp.route('/video/lote/<int:tamanho_lote>', methods=['POST'])
+    @perfil_required('admin', 'supervisor')
     def modificar_tamanho_lote(tamanho_lote):
         """
-        Modifica o tamanho do lote de câmeras processadas por cada worker.
-        Corpo da requisição (JSON): {"tamanho_lote": 2}
+            Modifica o tamanho do lote de câmeras processadas por cada worker.
+            Corpo da requisição (JSON): {"tamanho_lote": 2}
         """
         if tamanho_lote < 1:
             return jsonify({"message": "O tamanho do lote deve ser pelo menos 1."}), 400

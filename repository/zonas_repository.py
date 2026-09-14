@@ -83,15 +83,22 @@ class ZonasRepository:
             else:
                 return None
 
-    def registrar_zona(self, nome: str | None, id_camera: int, x: float = 0.0, y: float = 0.0, largura: float = 1.0, altura: float = 1.0, permitido: bool = True) -> Zona | None:
+    def registrar_zona(self, nome: str | None, id_camera: int, x: float = 0.0, y: float = 0.0, largura: float = 1.0, altura: float = 1.0, permitido: bool = True, id_epi: int | None = None) -> Zona | None:
         with self.conn.cursor() as cursor:
             try:
                 cursor.execute(
                     "INSERT INTO zonas (nome, x, y, largura, altura, id_camera, permitido) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING *",
                     (nome, x, y, largura, altura, id_camera, permitido)
                 )
-                self.conn.commit()
                 zona = cursor.fetchone()
+                if zona is None:
+                    self.conn.rollback()
+                    return None
+                cursor.execute(
+                    "INSERT INTO monitorar (id_zona, id_epi) VALUES (%s, %s)",
+                    (zona[0], id_epi)
+                )
+                self.conn.commit()
 
                 if zona:
                     return Zona(

@@ -1,4 +1,7 @@
 from collections import defaultdict
+from core.vision_metrics import FrameMetrics
+from core.alerta_diagnostics import trace_alert_candidate
+from core.tipo_deteccao import TIPOS_POSTURA
 from extensions import REDIS_URL
 from ultralytics import YOLO
 import numpy as np
@@ -9,6 +12,8 @@ import math
 import time
 import cv2
 import os
+import logging
+import psycopg2
 
 from repository.monitoramento_repository import MonitoramentoRepository
 from repository.setores_repository import SetoresRepository
@@ -20,7 +25,8 @@ from tasks.alarme_task import enviar_comando
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, 'assets', 'modelo', 'treinamento', 'weights', 'best.pt')
-MODEL_PATH_POSE = os.path.join(BASE_DIR, 'assets', 'modelo', 'treinamento', 'weights', 'yolov8m-pose.pt')
+MODEL_PATH_POSE = os.path.join(BASE_DIR, 'assets', 'modelo', 'treinamento', 'weights', 'yolov8s-pose.pt')
+logger = logging.getLogger(__name__)
 
 class VisaoService:
     EPI_CLASSE_POR_LABEL = {
@@ -169,7 +175,6 @@ class VisaoService:
 
 
     def _zonas_de_monitoramento(self, id_camera: int) -> list[Zona]:
-    def _zonas_de_monitoramento(self, id_camera: int) -> list[Zona]:
         """
         Retorna a lista de zonas de monitoramento para a câmera especificada.
         """
@@ -236,7 +241,6 @@ class VisaoService:
 
 
     def _caixas_intersectam(self, caixa1: tuple, caixa2: tuple) -> bool:
-    def _caixas_intersectam(self, caixa1: tuple, caixa2: tuple) -> bool:
         """
         Verifica se duas caixas delimitadoras (caixa1 e caixa2) se intersectam.
         """
@@ -263,13 +267,11 @@ class VisaoService:
 
 
     def _classe_epi_por_label(self, label: str) -> str | None:
-    def _classe_epi_por_label(self, label: str) -> str | None:
         if not label:
             return None
         return self.EPI_CLASSE_POR_LABEL.get(str(label).strip().lower())
 
 
-    def _zona_requer_classe(self, categorias_permitidas: list[str] | None, classe: str, permitido: bool = False) -> bool:
     def _zona_requer_classe(self, categorias_permitidas: list[str] | None, classe: str, permitido: bool = False) -> bool:
         if classe == "pessoa" and permitido:
             return True
@@ -278,7 +280,6 @@ class VisaoService:
             return False
 
         for categoria in categorias_permitidas:
-            categoria_normalizada = self._classe_epi_por_label(categoria) or str(categoria).strip().lower()
             categoria_normalizada = self._classe_epi_por_label(categoria) or str(categoria).strip().lower()
 
             if categoria_normalizada == classe:
@@ -301,18 +302,14 @@ class VisaoService:
             e processa a inferência de visão computacional agrupando os frames disponíveis.
         """
         self._ensure_models_loaded()
-        """
-            Executa o loop de processamento em batch (lote) para múltiplas câmeras.
-            Usa threads leves de leitura para evitar bloqueio por timeout de rede
-            e processa a inferência de visão computacional agrupando os frames disponíveis.
-        """
-        self._ensure_models_loaded()
 
         zonas_por_camera: dict[int, list[Zona]] = {}
         
-        
         # Dicionários de estado compartilhado entre threads/processos
-        ultimos_frames: dict[int, cv2.Mat] = {}
+        ultimos_frames = {}  # camera_id -> (sequence, frame, captured_at)
+        sequencias = defaultdict(int)
+        processados = defaultdict(int)
+        metricas = {camera_id: FrameMetrics() for camera_id in cameras}
         locks_frames: dict[int, threading.Lock] = {}    
         cameras_ativas_status: dict[int, bool] = {}
 
@@ -343,10 +340,7 @@ class VisaoService:
 
                             if last_results is not None and cam_id in last_results:
                                 info = last_results[cam_id]
-                            if last_results is not None and cam_id in last_results:
-                                info = last_results[cam_id]
                                 info['connected'] = False
-                                last_results[cam_id] = info
                                 last_results[cam_id] = info
                             continue
                     else:
@@ -360,8 +354,6 @@ class VisaoService:
                     cameras_ativas_status[cam_id] = False
                     cameras_ativas_status[cam_id] = False
 
-                    if last_results is not None and cam_id in last_results:
-                        info = last_results[cam_id]
                     if last_results is not None and cam_id in last_results:
                         info = last_results[cam_id]
                         info['connected'] = False
@@ -379,21 +371,14 @@ class VisaoService:
 
                 # Guarda com segurança o último frame lido
                 with locks_frames[cam_id]:
-                    ultimos_frames[cam_id] = frame
+                    sequencias[cam_id] += 1
+                    ultimos_frames[cam_id] = (sequencias[cam_id], frame, time.monotonic())
                 cameras_ativas_status[cam_id] = True
-                with locks_frames[cam_id]:
-                    ultimos_frames[cam_id] = frame
-                cameras_ativas_status[cam_id] = True
-
-                if last_results is not None and cam_id in last_results:
-                    info = last_results[cam_id]
+                
                 if last_results is not None and cam_id in last_results:
                     info = last_results[cam_id]
                     info['connected'] = True
-                    info['last_frame_time'] = tempo_atual
-                    last_results[cam_id] = info
-
-                time.sleep(0.01)  # Pequena pausa para evitar uso excessivo de CPU
+                    info['last_frame_time'] = time.time()
                     last_results[cam_id] = info
 
                 time.sleep(0.01)  # Pequena pausa para evitar uso excessivo de CPU
@@ -417,17 +402,11 @@ class VisaoService:
 
                 pacotes_lote = []
                 
-                pacotes_lote = []
-                
                 for camera_id in cameras:
                     # Verifica se não há nenhuma solicitação para recarregar zonas ou realizar reconexão
                     if reload_zones_events:
                         event = reload_zones_events.get(camera_id)
-                    # Verifica se não há nenhuma solicitação para recarregar zonas ou realizar reconexão
-                    if reload_zones_events:
-                        event = reload_zones_events.get(camera_id)
 
-                        if event and event.is_set():
                         if event and event.is_set():
                             print(f"🔄 Recarregando zonas da câmera {camera_id} no processo de visão...")
                             zonas_por_camera[camera_id] = self._zonas_de_monitoramento(camera_id)
@@ -436,14 +415,12 @@ class VisaoService:
 
                     if cameras_ativas_status.get(camera_id, False):
                         with locks_frames[camera_id]:
-                            frame = ultimos_frames.get(camera_id)
+                            pacote = ultimos_frames.get(camera_id)
 
-                            if frame is not None:
-                                pacotes_lote.append((camera_id, frame.copy()))
-                            if frame is not None:
-                                pacotes_lote.append((camera_id, frame.copy()))
+                            if pacote is not None and pacote[0] > processados[camera_id]:
+                                sequence, frame, captured_at = pacote
+                                pacotes_lote.append((camera_id, frame.copy(), captured_at, sequence))
 
-                if not pacotes_lote:
                 if not pacotes_lote:
                     time.sleep(0.01)
                     continue
@@ -461,27 +438,27 @@ class VisaoService:
                     continue
 
                 # Despacho dos resultados e frames estritamente emparelhados por camera_id
-                for idx, (camera_id, frame_final) in enumerate(pacotes_lote):
+                for idx, (camera_id, frame_final, captured_at, sequence) in enumerate(pacotes_lote):
+                    processados[camera_id] = sequence
                     detections = batch_detections[idx]
                     class_count = batch_count[idx]
 
                     # Atualiza os resultados compartilhados no Manager
                     if last_results is not None and camera_id in last_results:
-                    # Atualiza os resultados compartilhados no Manager
-                    if last_results is not None and camera_id in last_results:
                         info = last_results[camera_id]
                         info['detections'] = detections
                         info['class_count'] = dict(class_count)
+                        measurement = metricas[camera_id].complete(captured_at, time.monotonic())
+                        # One assignment publishes detections and their measurements together.
+                        info['result'] = dict(measurement, detections=detections, class_count=dict(class_count))
                         last_results[camera_id] = info
 
 
                     # >>>>>>>>>>>> PODE REMOVER ISSO, DEPOIS SOMENTE DEBUG <<<<<<<<<<<<
                     self._desenhar_hud_topo(frame_final, dict(class_count))
-                    self._desenhar_hud_topo(frame_final, dict(class_count))
                     # =================================================================
                             
                     # Despacha o frame para a fila da respectiva câmera
-                    frame_queue = frame_queues.get(camera_id) if frame_queues else None
                     frame_queue = frame_queues.get(camera_id) if frame_queues else None
                     if frame_queue is not None:
                         sucesso_enc, buffer = cv2.imencode('.jpg', frame_final)
@@ -617,11 +594,9 @@ class VisaoService:
         
 
     def _batch_object_detection(self, frames: list, cam_ids: list[int], zonas_por_camera: dict[int, list[Zona]]) -> tuple[list[list[dict]], list[defaultdict]]:
-    def _batch_object_detection(self, frames: list, cam_ids: list[int], zonas_por_camera: dict[int, list[Zona]]) -> tuple[list[list[dict]], list[defaultdict]]:
         """
             Recebe uma lista de frame e IDs de câmeras e executa a inferência em lote.
         """
-        self._ensure_models_loaded()
         self._ensure_models_loaded()
 
         if not frames:
@@ -664,17 +639,10 @@ class VisaoService:
                         for monitoramento in zonas_configuradas:
                             regiao_px = self.regiao_para_pixels(monitoramento.regiao, img_largura, img_altura)
                             if self._caixas_intersectam(xyxy, self.regiao_para_caixa(regiao_px)):
-                    # Itera sobre as zonas configuradas para verificar se o objeto está dentro de alguma delas
-                    for monitoramento in zonas_configuradas:
-                        regiao_px = self.regiao_para_pixels(monitoramento.regiao, img_largura, img_altura)
-                        if self._caixas_intersectam(xyxy, self.regiao_para_caixa(regiao_px)):
 
                                 # Verifica se o objeto é requisitado na zona
                                 if self._zona_requer_classe(monitoramento.epis_categoria, self._classe_epi_por_label(label_name), monitoramento.permitido):
                                     zonas_do_objeto.append(monitoramento.id)
-                            # Verifica se o objeto é requisitado na zona
-                            if self._zona_requer_classe(monitoramento.epis_categoria, self._classe_epi_por_label(label_name), monitoramento.permitido):
-                                zonas_do_objeto.append(monitoramento.id)
 
                                     # Verifica se o objeto é 'com_...' ou 'sem_...' e se está dentro da zona que requer o EPI correspondente
                                     if label_name.startswith("sem_"):
@@ -728,7 +696,6 @@ class VisaoService:
         threading.Thread(target=salvar, daemon=True).start()
 
     def _registrar_alerta_epi_incorreto(self, monitoramento: Zona, evento: str, track_id: int, severidade: int = 1) -> None:
-    def _registrar_alerta_epi_incorreto(self, monitoramento: Zona, evento: str, track_id: int, severidade: int = 1) -> None:
         """
         Registra um alerta, evitando duplicidade por um curto período.
         """
@@ -740,7 +707,10 @@ class VisaoService:
         cache_chave = f"lock:alerta:epi:{monitoramento.id_monitorar}:{evento}:{track_id}"
 
         # Se a chave já existir, significa que um alerta recente já foi registrado para este evento e track_id
-        if not self.redis_client.set(cache_chave, "1", ex=30, nx=True):
+        acquired = self.redis_client.set(cache_chave, "1", ex=30, nx=True)
+        trace_alert_candidate('epi', monitoramento.id_camera, monitoramento.id,
+                              evento, track_id, acquired)
+        if not acquired:
             return # Já existe um alerta recente para este evento e track_id
 
         setor = self.setores_repository.get_setor_por_id_zona(monitoramento.id)
@@ -760,7 +730,6 @@ class VisaoService:
 
         enviar_comando(comando="DISPARAR", endereco_esp32=alarme['endereco'])
 
-    def _avaliar_postura(self, metodo, **kargs):
     def _avaliar_postura(self, metodo, **kargs):
         """
             Avalia a postura combinando o ângulo de inclinação (visão lateral) 
@@ -897,12 +866,10 @@ class VisaoService:
 
 
     def _batch_pose_estimation(self, frames: list, cameras_id: list[int]) -> None:
-    def _batch_pose_estimation(self, frames: list, cameras_id: list[int]) -> None:
         """
         Implementa a lógica de estimativa de pose, desenha o esqueleto e 
         calcula a inclinação do tronco para gerar alertas de má postura.
         """
-        self._ensure_models_loaded()
         self._ensure_models_loaded()
 
         if not frames:
@@ -970,7 +937,6 @@ class VisaoService:
                     else:
                         # --- AVALIAÇÃO DO TRONCO ---
                         is_ma_postura, motivo, pt_ombro, pt_quadril = self._avaliar_postura(
-                        is_ma_postura, motivo, pt_ombro, pt_quadril = self._avaliar_postura(
                             "tronco", 
                             ombro_esq=ombro_esq, ombro_dir=ombro_dir, 
                             quadril_esq=quadril_esq, quadril_dir=quadril_dir
@@ -983,13 +949,13 @@ class VisaoService:
                                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, cor_coluna, 2)"""
                             
                             if track_id != -1:
-                                self._registrar_alerta_postura(camera_id, track_id, motivo)
-                                self._registrar_alerta_postura(camera_id, track_id, motivo)
+                                self._registrar_alerta_postura(
+                                    camera_id, track_id, motivo, tipo_deteccao='postura_tronco'
+                                )
                                 
                         cv2.line(frame, pt_ombro, pt_quadril, cor_coluna, 4, cv2.LINE_AA)
 
                         # --- AVALIAÇÃO DA ROTAÇÃO ---
-                        is_ma_postura_rotacao, motivo_rotacao, _, _ = self._avaliar_postura(
                         is_ma_postura_rotacao, motivo_rotacao, _, _ = self._avaliar_postura(
                             "rotacao", 
                             ombro_esq=ombro_esq, ombro_dir=ombro_dir, 
@@ -1002,11 +968,11 @@ class VisaoService:
                                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.CORES.get('vermelho', (0, 0, 255)), 2)"""
 
                             if track_id != -1:
-                                self._registrar_alerta_postura(camera_id, track_id, motivo_rotacao)
-                                self._registrar_alerta_postura(camera_id, track_id, motivo_rotacao)
+                                self._registrar_alerta_postura(
+                                    camera_id, track_id, motivo_rotacao, tipo_deteccao='postura_rotacao'
+                                )
 
                         # --- AVALIAÇÃO DE QUEDA ---
-                        is_caido, motivo_queda, _, _ = self._avaliar_postura(
                         is_caido, motivo_queda, _, _ = self._avaliar_postura(
                             "queda", 
                             ombro_esq=ombro_esq, ombro_dir=ombro_dir, 
@@ -1019,47 +985,56 @@ class VisaoService:
                                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.CORES.get('vermelho', (0, 0, 255)), 2)"""
                             
                             if track_id != -1:
-                                self._registrar_alerta_postura(camera_id, track_id, motivo_queda, severidade=3)
-                                self._registrar_alerta_postura(camera_id, track_id, motivo_queda, severidade=3)
+                                self._registrar_alerta_postura(
+                                    camera_id, track_id, motivo_queda, severidade=3, tipo_deteccao='queda'
+                                )
 
 
-    def _registrar_alerta_postura(self, camera_id: int, track_id: int, motivo: str, severidade: int = 1) -> None:
-    def _registrar_alerta_postura(self, camera_id: int, track_id: int, motivo: str, severidade: int = 1) -> None:
+    def _registrar_alerta_postura(self, camera_id: int, track_id: int, motivo: str,
+                                severidade: int = 1, *, tipo_deteccao: str) -> None:
         """
         Registra um alerta de má postura no banco de dados, evitando duplicidade por ID.
         """
 
+        if tipo_deteccao not in TIPOS_POSTURA:
+            raise ValueError('tipo_deteccao inválido para postura.')
+
         cache_chave = f"lock:alerta:postura:{camera_id}:{track_id}:{motivo}"
 
         # Evita alertas duplicados para o mesmo track_id e motivo dentro de um período de 30 segundos
-        if not self.redis_client.set(cache_chave, "1", ex=30, nx=True):
+        acquired = self.redis_client.set(cache_chave, "1", ex=30, nx=True)
+        trace_alert_candidate('postura', camera_id, None, motivo, track_id, acquired)
+        if not acquired:
             return
 
-        zonas = self._zonas_de_monitoramento(camera_id)
-        zonas = self._zonas_de_monitoramento(camera_id)
-
-        if not zonas:
-            return
-
-        zona_alvo = zonas[0]    
-        
-        setor = self.setores_repository.get_setor_por_id_camera(camera_id)
-        
-        if setor:
+        try:
+            setor = self.setores_repository.get_setor_por_id_camera(camera_id)
+            if not setor:
+                logger.warning('Câmera/setor inexistente ao registrar postura: %s.', camera_id)
+                return
             responsaveis = self.setores_repository.get_responsaveis_por_setor(setor.id)
             sucesso = self.alertas_service.criar_alerta(
-                monitoramento=zona_alvo,
+                monitoramento=None,
                 id_usuario=responsaveis[0] if responsaveis else None,
-                evento = motivo, 
+                evento=motivo,
                 severidade=severidade,
-                destinatarios=responsaveis
+                destinatarios=responsaveis,
+                tipo_deteccao=tipo_deteccao,
+                id_camera=camera_id
             )
+
+            if sucesso:
+                print(f"⚠️ Má postura detectada - ID: {track_id}")
+        except psycopg2.Error as exc:
+            self.connection.rollback()
+            logger.warning('Falha ao registrar postura da câmera %s (SQLSTATE %s).', camera_id, exc.pgcode)
+        except (ValueError, redis.exceptions.RedisError) as exc:
+            logger.warning('Falha ao registrar/notificar postura da câmera %s: %s.', camera_id, exc)
 
 
     # ==================================================
     # Funções para embelezar o UI do vídeo, desenhando zonas, caixas e cantos estilizados
     # ==================================================
-    def _desenhar_cantos(self, frame, x1, y1, x2, y2, cor, espessura=2, comprimento=12):
     def _desenhar_cantos(self, frame, x1, y1, x2, y2, cor, espessura=2, comprimento=12):
         """Desenha os cantos reforçados protegendo os limites da caixa."""
         largura = max(0, x2 - x1)
@@ -1085,7 +1060,6 @@ class VisaoService:
         cv2.line(frame, (x2, y2), (x2, y2 - comp_y), cor, espessura, cv2.LINE_AA)
 
 
-    def _desenhar_caixa_delimitadora(self, frame, box, label, color=(0, 210, 255)):
     def _desenhar_caixa_delimitadora(self, frame, box, label, color=(0, 210, 255)):
         """
         Desenha caixa delimitadora moderna protegida contra overflow de coordenadas.
@@ -1140,7 +1114,6 @@ class VisaoService:
         cv2.putText(frame, label, (txt_x, txt_y), fonte, escala, (15, 15, 15), espessura_txt, cv2.LINE_AA)
 
 
-    def _desenhar_hud_topo(self, frame, class_count: dict, fps: float = None):
     def _desenhar_hud_topo(self, frame, class_count: dict, fps: float = None):
         largura = frame.shape[1]
         

@@ -3,6 +3,7 @@ import time
 
 from services.visao_service import VisaoService
 from connection.conn import Connection
+from core.vision_metrics import detection_snapshot
 
 class VisionWorker:
     def __init__(self, cameras_lote: list[int] = None, camera_id: int = None):
@@ -38,6 +39,7 @@ class VisionWorker:
             camera_data['class_count'] = {}
             camera_data['connected'] = False
             camera_data['last_frame_time'] = 0
+            camera_data['result'] = {}
             self.last_results[camera_id] = camera_data
 
 
@@ -118,6 +120,11 @@ class VisionWorker:
 
         return response.get('detections', [])
 
+    def get_detection_snapshot(self, camera_id: int) -> dict:
+        cam_info = self.last_results.get(camera_id, {})
+        return detection_snapshot(cam_info.get('result', {}),
+                                  self.is_online(camera_id), time.monotonic())
+
     def is_online(self, camera_id: int = None) -> bool:
         """
             Retorna True se o processo estiver vivo e se recebeu um frame nos últimos 5 segundos.
@@ -135,4 +142,4 @@ class VisionWorker:
         connected = cam_info.get('connected', False)
         last_frame_time = cam_info.get('last_frame_time', 0)
 
-        return connected and (time.time() - last_frame_time) < 5
+        return bool(connected and 0 <= time.time() - last_frame_time < 5)
