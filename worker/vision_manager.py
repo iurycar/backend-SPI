@@ -19,6 +19,8 @@ def iniciar_vision_workers(cameras_id: list[int], tamanho_lote: int = 5):
         if not lote_novas:
             continue
 
+        lote_novas.sort()  # Ordena para consistência na criação de workers
+
         worker = VisionWorker(cameras_lote=lote_novas)
         worker.start()
 

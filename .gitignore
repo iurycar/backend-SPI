@@ -39,3 +39,4 @@ PLANO_INTEGRACAO_BACKEND.md
 RELATORIO_IMPLEMENTACAO_BACKEND.md
 assets/alarme-esp32/
 processador.py
+tests/

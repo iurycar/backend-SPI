@@ -9,6 +9,8 @@ class CamerasRepository:
             cursor.execute("SELECT * FROM cameras")
             cameras = cursor.fetchall()
 
+            cameras.sort()
+
             cameras_lista: list[Camera] = []
 
             if cameras:
@@ -34,7 +36,10 @@ class CamerasRepository:
                     id=camera[0],
                     nome=camera[1],
                     ip=camera[2],
-                    id_setor=camera[3]
+                    id_setor=camera[3],
+                    rotacao=camera[4],
+                    espelhar_horizontal=camera[5],
+                    espelhar_vertical=camera[6]
                 )
 
             return None
@@ -89,13 +94,13 @@ class CamerasRepository:
 
         return None
 
-    def atualizar_camera(self, camera_id: int, ip: str, id_setor: int, nome: str | None = None) -> Camera | None:
+    def atualizar_camera(self, camera_id: int, ip: str, id_setor: int, nome: str | None = None, rotacao: int = 0, espelhar_horizontal: bool = False, espelhar_vertical: bool = False) -> Camera | None:
         with self.conn.cursor() as cursor:
             try:
-                if nome is not None:
+                if nome is not None or rotacao != 0 or espelhar_horizontal or espelhar_vertical:
                     cursor.execute(
-                        "UPDATE cameras SET nome = %s, ip = %s, id_setor = %s WHERE id_camera = %s RETURNING *",
-                        (nome, ip, id_setor, camera_id)
+                        "UPDATE cameras SET nome = %s, ip = %s, id_setor = %s, rotacao = %s, espelhar_horizontal = %s, espelhar_vertical = %s WHERE id_camera = %s RETURNING *",
+                        (nome, ip, id_setor, rotacao, espelhar_horizontal, espelhar_vertical, camera_id)
                     )
                 else:
                     cursor.execute(
