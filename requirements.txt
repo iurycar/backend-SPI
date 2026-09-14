@@ -6,7 +6,7 @@ numpy
 python-dotenv
 psycopg2-binary
 opencv-python==4.10.0.84
-ultralytics==8.3.0
+ultralytics
 redis
 rq
 simple-websocket

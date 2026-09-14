@@ -18,21 +18,22 @@ class VisionWorker:
         self.stop_event = None
         self.reload_zones_events = {}
         self.frame_queues = {}
-        self.manager = mp.Manager()
-        self.last_results = self.manager.dict()
+        self.last_results = None
 
     def start(self) -> None:
         if self.process is not None and self.process.is_alive():
             return
 
         self.stop_event = mp.Event()
+        manager = mp.Manager()
+        self.last_results = manager.dict()
 
         for camera_id in self.cameras:
             self.reload_zones_events[camera_id] = mp.Event() # Evento para sinalizar recarregamento de zonas
             self.frame_queues[camera_id] = mp.Queue(maxsize=1) # Fila de tamanho 1 para armazenar apenas o último frame
 
             # Inicializa o dicionário de resultados para cada câmera
-            camera_data = self.manager.dict()
+            camera_data = manager.dict()
             camera_data['detections'] = []
             camera_data['class_count'] = {}
             camera_data['connected'] = False
@@ -75,8 +76,8 @@ class VisionWorker:
         if self.process is not None and self.process.is_alive():
             self.process.join(timeout=3)
 
-
-    def _run_batch(self, cameras, frame_queues, last_results, stop_event, reload_zones_events) -> None:
+    @staticmethod
+    def _run_batch(cameras, frame_queues, last_results, stop_event, reload_zones_events) -> None:
         try:
             from connection.conn import Connection
             connection = Connection().get_connection()
