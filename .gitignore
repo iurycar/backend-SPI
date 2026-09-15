@@ -31,6 +31,8 @@ assets/modelo/active_learning/dataset/
 assets/modelo/active_learning/dataset_captura/images
 assets/modelo/active_learning/dataset_captura/labels
 assets/modelo/active_learning/dataset_captura/videos
+assets/modelo/active_learning/dataset_captura/Liora
+assets/modelo/active_learning/dataset_captura/LEIA_ME.txt
 assets/modelo/active_learning/dataset_tratado/train/images
 assets/modelo/active_learning/dataset_tratado/train/labels
 assets/modelo/active_learning/dataset_tratado/val/images
@@ -40,3 +42,7 @@ RELATORIO_IMPLEMENTACAO_BACKEND.md
 assets/alarme-esp32/
 processador.py
 tests/
+filtro.py
+split_val.py
+yolov8n.pt
+assets/modelo/treinamento/runs/

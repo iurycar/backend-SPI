@@ -24,8 +24,8 @@ from models.zonas import Zona
 from tasks.alarme_task import enviar_comando
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
-MODEL_PATH = os.path.join(BASE_DIR, 'assets', 'modelo', 'treinamento', 'weights', 'best.pt')
-MODEL_PATH_POSE = os.path.join(BASE_DIR, 'assets', 'modelo', 'treinamento', 'weights', 'yolov8s-pose.pt')
+MODEL_PATH = os.path.join(BASE_DIR, 'assets', 'modelo', 'treinamento', 'best.pt')
+MODEL_PATH_POSE = os.path.join(BASE_DIR, 'assets', 'modelo', 'treinamento', 'yolov8s-pose.pt')
 logger = logging.getLogger(__name__)
 
 class VisaoService:
