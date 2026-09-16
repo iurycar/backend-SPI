@@ -327,44 +327,38 @@ class VisaoService:
             cameras_ativas_status[camera_id] = False
 
         def thread_captura_camera(cam_id: int):
-            """Thread dedicada a leitura contínua de stream de uma câmera específica."""
             cap = None
             proxima_tentativa = 0
 
             while not (stop_event is not None and stop_event.is_set()):
                 tempo_atual = time.time()
 
-                # Tenta abrir/reconectar após um intervalo de tempo
+                # Tenta abrir/reconectar
                 if cap is None or not cap.isOpened():
-                    if tempo_atual > proxima_tentativa:
+                    if tempo_atual >= proxima_tentativa:
                         proxima_tentativa = tempo_atual + 5
-
                         cap = self.open_camera(cam_id)
 
-                        sucesso, frame = cap.read()
-                        if not sucesso or frame is None or frame.size == 0:
+                        if cap is None or not cap.isOpened():
                             cameras_ativas_status[cam_id] = False
-
                             if last_results is not None and cam_id in last_results:
                                 info = last_results[cam_id]
                                 info['connected'] = False
                                 last_results[cam_id] = info
-
-                            cap.release()
-                            cap = None
-                            proxima_tentativa = tempo_atual + 2
+                            
+                            if cap is not None:
+                                cap.release()
+                                cap = None
+                            time.sleep(0.5)
                             continue
                     else:
-                        time.sleep(0.1) 
+                        time.sleep(0.2)
                         continue
 
-                # Leitura do frame
-                # Leitura do frame
+                # Leitura do frame protegida
                 sucesso, frame = cap.read()
-                if not sucesso:
+                if not sucesso or frame is None or frame.size == 0:
                     cameras_ativas_status[cam_id] = False
-                    cameras_ativas_status[cam_id] = False
-
                     if last_results is not None and cam_id in last_results:
                         info = last_results[cam_id]
                         info['connected'] = False
@@ -372,13 +366,11 @@ class VisaoService:
 
                     cap.release()
                     cap = None
-
                     proxima_tentativa = tempo_atual + 4
                     continue
 
                 frame = self.aplicar_transformacoes_frame(frame, cam_id)
 
-                # Guarda com segurança o último frame lido
                 with locks_frames[cam_id]:
                     sequencias[cam_id] += 1
                     ultimos_frames[cam_id] = (sequencias[cam_id], frame, time.monotonic())
@@ -390,7 +382,7 @@ class VisaoService:
                     info['last_frame_time'] = time.time()
                     last_results[cam_id] = info
 
-                time.sleep(0.01)  # Pequena pausa para evitar uso excessivo de CPU
+                time.sleep(0.01)
 
             if cap is not None:
                 cap.release()
