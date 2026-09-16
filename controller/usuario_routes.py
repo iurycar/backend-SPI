@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request, session
 from services.usuario_service import UsuarioService
 import schemas.usuario_dto as usuario_dto
 from core.errors import ValidationError
+from core.auth import perfil_required
 
 def create_user_bp(connection):
     user_bp = Blueprint('user_bp', __name__)
@@ -68,6 +69,12 @@ def create_user_bp(connection):
         if 'user_id' not in session:
             return jsonify({'message': 'Não autenticado'}), 401
 
+        ativo = usuario_service.obter_status_ativo(session.get('email'))
+
+        if not ativo:
+            session.clear()
+            return jsonify({'message': 'Usuário desativado'}), 403
+
         return jsonify({
             'authenticated': True,
             'user': {
@@ -84,6 +91,7 @@ def create_user_bp(connection):
         }), 200
 
     @user_bp.route('/signup', methods=['POST'])
+    @perfil_required('admin')
     def signup():
         data = request.get_json()
 
