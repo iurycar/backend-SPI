@@ -1,7 +1,7 @@
-path: '.'
+path: '/mnt/Arquivos/Engenharia/Challenge 2026/backend-SPI/assets/modelo/active_learning/dataset_tratado'
 
-train: images/train
-val: images/val
+train: train/images
+val: val/images
 
 
 nc: 10
