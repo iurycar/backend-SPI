@@ -16,7 +16,10 @@ class CamerasService:
                     'id': camera.id,
                     'nome': camera.nome,
                     'ip': camera.ip,
-                    'id_setor': camera.id_setor
+                    'id_setor': camera.id_setor,
+                    'rotacao': camera.rotacao,
+                    'espelhar_horizontal': camera.espelhar_horizontal,
+                    'espelhar_vertical': camera.espelhar_vertical
                 }
                 cameras_lista.append(camera_dict)
 
@@ -30,7 +33,10 @@ class CamerasService:
                 'id': camera.id,
                 'nome': camera.nome,
                 'ip': camera.ip,
-                'id_setor': camera.id_setor
+                'id_setor': camera.id_setor,
+                'rotacao': camera.rotacao,
+                'espelhar_horizontal': camera.espelhar_horizontal,
+                'espelhar_vertical': camera.espelhar_vertical
             }
 
         return None
@@ -46,7 +52,10 @@ class CamerasService:
                     'id': camera.id,
                     'nome': camera.nome,
                     'ip': camera.ip,
-                    'id_setor': camera.id_setor
+                    'id_setor': camera.id_setor,
+                    'rotacao': camera.rotacao,
+                    'espelhar_horizontal': camera.espelhar_horizontal,
+                    'espelhar_vertical': camera.espelhar_vertical
                 }
                 cameras_lista.append(camera_dict)
 
@@ -66,7 +75,10 @@ class CamerasService:
                 'id': camera.id,
                 'nome': camera.nome,
                 'ip': camera.ip,
-                'id_setor': camera.id_setor
+                'id_setor': camera.id_setor,
+                'rotacao': camera.rotacao,
+                'espelhar_horizontal': camera.espelhar_horizontal,
+                'espelhar_vertical': camera.espelhar_vertical
             }
 
         return None
