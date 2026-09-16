@@ -160,10 +160,10 @@ class ZonasService:
         return None
 
     def deletar_zona(self, zona_id: int) -> bool:
+        zona = self.zonas_repository.obter_zona_por_id(zona_id)
         sucesso = self.zonas_repository.deletar_zona(zona_id)
         if sucesso:
             # Encontra a zona deletada para invalidar o cache
-            zona = self.zonas_repository.obter_zona_por_id(zona_id)
             if zona:
                 redis_client.delete(f"cache:zonas:camera:{zona.id_camera}")  # Invalida o cache para a câmera afetada
         return sucesso
