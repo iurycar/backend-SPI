@@ -4,6 +4,7 @@ from dataclasses import dataclass
 class ConfigDTO:
     source_dir: str
     target_dir: str
+    classes: list = None
 
     @classmethod
     def from_dict(cls, data: dict) -> 'ConfigDTO':
@@ -19,7 +20,13 @@ class ConfigDTO:
         if target_dir is None or not isinstance(target_dir, str) or len(target_dir) == 0:
             raise ValueError("Invalid or missing 'target_dir' field. It must be a non-empty string.")
 
+        if 'classes' in data:
+            classes = data['classes']
+            if not isinstance(classes, list) or not all(isinstance(cls_name, str) for cls_name in classes):
+                raise ValueError("Invalid 'classes' field. It must be a list of strings.")
+
         return cls(
             source_dir=source_dir,
-            target_dir=target_dir
+            target_dir=target_dir,
+            classes=classes
         )

@@ -25,7 +25,7 @@ from tasks.alarme_task import enviar_comando
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, 'assets', 'modelo', 'treinamento', 'best.pt')
-MODEL_PATH_POSE = os.path.join(BASE_DIR, 'assets', 'modelo', 'treinamento', 'yolov8s-pose.pt')
+MODEL_PATH_POSE = os.path.join(BASE_DIR, 'assets', 'modelo', 'treinamento', 'yolov8m-pose.pt')
 logger = logging.getLogger(__name__)
 
 class VisaoService:
@@ -122,12 +122,20 @@ class VisaoService:
         if rtsp_url:
             print(f"🔗 Conectando ao RTSP da câmera {camera_id}: {rtsp_url}")
 
-            # Define flags do FFmpeg via variáveis de ambiente para reduzir latência
-            os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = "rtsp_transport;tcp|buffer_size;1024000|max_delay;500000"
+            # stimeout em microssegundos: 5000000 = 5 segundos (evita travar por 30s)
+            # rtsp_transport: tcp evita pacotes UDP fragmentados e 'error while decoding MB'
+            os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = (
+                "rtsp_transport;tcp|"
+                "stimeout;5000000|"
+                "max_delay;500000|"
+                "buffer_size;2048000"
+            )
 
             cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
 
-            # Limita buffer interno do OpenCV para evitar delay acumulado
+            # Configura timeouts nativos do OpenCV caso a versão do build suporte
+            cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000)
+            cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000)
             cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
             if cap.isOpened():
@@ -320,7 +328,6 @@ class VisaoService:
 
         def thread_captura_camera(cam_id: int):
             """Thread dedicada a leitura contínua de stream de uma câmera específica."""
-            """Thread dedicada a leitura contínua de stream de uma câmera específica."""
             cap = None
             proxima_tentativa = 0
 
@@ -334,17 +341,21 @@ class VisaoService:
 
                         cap = self.open_camera(cam_id)
 
-                        if cap is None or not cap.isOpened():
-                            cameras_ativas_status[cam_id] = False
+                        sucesso, frame = cap.read()
+                        if not sucesso or frame is None or frame.size == 0:
                             cameras_ativas_status[cam_id] = False
 
                             if last_results is not None and cam_id in last_results:
                                 info = last_results[cam_id]
                                 info['connected'] = False
                                 last_results[cam_id] = info
+
+                            cap.release()
+                            cap = None
+                            proxima_tentativa = tempo_atual + 2
                             continue
                     else:
-                        time.sleep(0.1)
+                        time.sleep(0.1) 
                         continue
 
                 # Leitura do frame
@@ -362,8 +373,6 @@ class VisaoService:
                     cap.release()
                     cap = None
 
-                    if hasattr(self.modelo, 'predictor') and self.modelo.predictor is not None:
-                        self.modelo.predictor.trackers = None  # Limpa os rastreadores para evitar inconsistências
                     proxima_tentativa = tempo_atual + 4
                     continue
 
@@ -501,7 +510,12 @@ class VisaoService:
 
         frame_processado = frame
 
-        rotacao, espelhar_horizontal, espelhar_vertical = self.cameras_service.obter_transformacoes_camera(camera_id)
+        # Tratamento seguro contra retorno None do serviço/banco
+        transformacoes = self.cameras_service.obter_transformacoes_camera(camera_id)
+        if not transformacoes:
+            return frame_processado
+
+        rotacao, espelhar_horizontal, espelhar_vertical = transformacoes
 
         # 1. Rotação Ortogonal (cv2.rotate é O(1) em memória, sem interpolação afim)
         if rotacao in (90, -270):
@@ -594,21 +608,15 @@ class VisaoService:
         
 
     def _batch_object_detection(self, frames: list, cam_ids: list[int], zonas_por_camera: dict[int, list[Zona]]) -> tuple[list[list[dict]], list[defaultdict]]:
-        """
-            Recebe uma lista de frame e IDs de câmeras e executa a inferência em lote.
-        """
         self._ensure_models_loaded()
 
         if not frames:
             return [], []
 
-        results_objects = self.modelo.track(frames, persist=True, conf=0.3, iou=0.4, tracker="bytetrack.yaml", verbose=False)
-
         batch_detections = []
         batch_class_count = []
 
-        for idx, result in enumerate(results_objects):
-            frame = frames[idx]
+        for idx, frame in enumerate(frames):
             cam_id = cam_ids[idx]
             zonas_configuradas = zonas_por_camera.get(cam_id, [])
 
@@ -617,46 +625,45 @@ class VisaoService:
             img_altura, img_largura = frame.shape[:2]
             frame_limpo = frame.copy()
 
-            if result.boxes is not None:
+            # Rastreamento individual por frame para evitar colisão entre câmeras distintas
+            try:
+                results = self.modelo.track(frame, persist=True, conf=0.3, iou=0.4, tracker="bytetrack.yaml", verbose=False)
+                result = results[0] if results else None
+            except Exception as e:
+                logger.warning(f"Erro no tracking da câmera {cam_id}: {e}")
+                result = None
+
+            if result is not None and result.boxes is not None:
                 self._processar_active_learning(frame_limpo, result.boxes, (img_altura, img_largura))
 
-                # Itera sobre cada caixa detectada
                 for box in result.boxes:
-                    xyxy = box.xyxy[0].cpu().numpy().astype(int) # Obtém as coordenadas da caixa delimitadora
-                    cls = int(box.cls[0]) # Obtém a classe do objeto detectado
-                    conf = float(box.conf[0]) # Obtém a confiança da detecção
+                    xyxy = box.xyxy[0].cpu().numpy().astype(int)
+                    cls = int(box.cls[0])
+                    conf = float(box.conf[0])
 
-
-                    # Desenha a caixa delimitadora somente se a confiança for maior ou igual a 0.5
                     if conf >= 0.5:
-                        # Obtém o ID do objeto rastreado (track_id) e o nome da classe (label_name)
                         track_id = int(box.id[0]) if box.id is not None else -1
                         label_name = self.modelo.names[cls].lower()
 
-                        zonas_do_objeto = [] # Lista para armazenar os IDs das zonas em que o objeto foi detectado
+                        zonas_do_objeto = []
 
-                        # Itera sobre as zonas configuradas para verificar se o objeto está dentro de alguma delas
                         for monitoramento in zonas_configuradas:
                             regiao_px = self.regiao_para_pixels(monitoramento.regiao, img_largura, img_altura)
                             if self._caixas_intersectam(xyxy, self.regiao_para_caixa(regiao_px)):
 
-                                # Verifica se o objeto é requisitado na zona
                                 if self._zona_requer_classe(monitoramento.epis_categoria, self._classe_epi_por_label(label_name), monitoramento.permitido):
                                     zonas_do_objeto.append(monitoramento.id)
 
-                                    # Verifica se o objeto é 'com_...' ou 'sem_...' e se está dentro da zona que requer o EPI correspondente
                                     if label_name.startswith("sem_"):
                                         self._desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')}", self.CORES.get('vermelho', (0, 0, 255)))
                                         self._registrar_alerta_epi_incorreto(monitoramento, f"Sem EPI necessário: {self._classe_epi_por_label(label_name)}", track_id, severidade=2)
                                     else:
-                                        # Verifica se o objeto é normal, caso seja desenha a caixa delimitadora em amarelo e registra o alerta de EPI incorreto
                                         if label_name.endswith("_normal"):
                                             self._desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')}", self.CORES.get('amarelo', (0, 255, 255)))
                                             self._registrar_alerta_epi_incorreto(monitoramento, f"Equipamento inadequado: {self._classe_epi_por_label(label_name)}", track_id, severidade=1)
                                         else:
                                             self._desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')}", self.CORES.get('verde', (0, 255, 255)))
                                                     
-                                # Verifica se o objeto é 'pessoa' e se está dentro da zona que não permite pessoas
                                 if label_name == "pessoa" and not self._zona_requer_classe(monitoramento.epis_categoria, "pessoa", monitoramento.permitido):
                                     self._desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize()} ID:{track_id} (Zona Restrita)", self.CORES.get('vermelho', (0, 0, 255)))
                                     self._registrar_alerta_epi_incorreto(monitoramento, "Pessoa em zona restrita", track_id, severidade=3)
@@ -665,7 +672,6 @@ class VisaoService:
                         
                         class_count[label_name] += 1
 
-                        # Adiciona a detecção à lista de detecções, associando-a às zonas em que o objeto foi detectado
                         for z_id in zonas_do_objeto:
                             detections.append({
                                 "id": track_id,
@@ -714,6 +720,10 @@ class VisaoService:
             return # Já existe um alerta recente para este evento e track_id
 
         setor = self.setores_repository.get_setor_por_id_zona(monitoramento.id)
+
+        if setor is None:
+            return
+
         responsaveis = self.setores_repository.get_responsaveis_por_setor(setor.id)
 
         self.alertas_service.registrar_alertas_com_notificacao_unica(

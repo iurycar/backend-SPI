@@ -1,4 +1,5 @@
 import multiprocessing as mp
+import traceback
 import time
 
 from services.visao_service import VisaoService
@@ -96,6 +97,7 @@ class VisionWorker:
 
         except Exception as exc:
             print(f"❌ Worker de lote falhou: {exc}")
+            traceback.print_exc()
 
     def next_frame(self, camera_id: int = None) -> bytes | None:
         if camera_id is None:

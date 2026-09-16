@@ -47,4 +47,5 @@ tests/
 filtro.py
 split_val.py
 yolov8n.pt
+yolov8m-pose.pt
 assets/modelo/treinamento/runs/

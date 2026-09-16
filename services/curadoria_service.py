@@ -300,8 +300,22 @@ class CuradoriaService:
         CURRENT_CONFIG['source_dir'] = nova_config.source_dir
         CURRENT_CONFIG['target_dir'] = nova_config.target_dir
 
+        if nova_config.classes is not None or nova_config.classes != []:
+            for idx, class_name in enumerate(nova_config.classes):
+                self.class_names[idx] = class_name
+
         tgt_train_imgs, tgt_train_lbls, tgt_val_imgs, tgt_val_lbls = self.get_target_paths()
         for path in (tgt_train_imgs, tgt_train_lbls, tgt_val_imgs, tgt_val_lbls):
             os.makedirs(path, exist_ok=True)
+
+        # Salva no arquivo YAML
+        config_data = {
+            "path_captured": nova_config.source_dir,
+            "path_cured": nova_config.target_dir,
+            "classes": nova_config.classes
+        }
+
+        with open("config.yaml", "w") as f:
+            yaml.dump(config_data, f)
 
         return CURRENT_CONFIG
