@@ -1,7 +1,7 @@
+from worker.vision_manager import workers, parar_vision_workers, iniciar_vision_workers
 from core.vision_metrics import empty_detection_snapshot
 from flask import Blueprint, Response, jsonify, request
 from core.auth import login_required, perfil_required
-from worker.vision_manager import workers
 import time
 import os
 
@@ -72,7 +72,7 @@ def create_visao_bp(connection):
         return jsonify({"message": msg, "enabled": enabled}), 200
 
     @visao_bp.route('/video/lote/<int:tamanho_lote>', methods=['POST'])
-    @perfil_required('admin', 'supervisor')
+    @perfil_required('admin')
     def modificar_tamanho_lote(tamanho_lote):
         """
             Modifica o tamanho do lote de câmeras processadas por cada worker.
@@ -81,8 +81,11 @@ def create_visao_bp(connection):
         if tamanho_lote < 1:
             return jsonify({"message": "O tamanho do lote deve ser pelo menos 1."}), 400
 
-        # Atualiza o tamanho do lote para todos os workers ativos
-        # TODO: Deve desligar os workers atuais e reiniciar com o novo tamanho de lote
+        # Desliga todos os workers
+        parar_vision_workers()
+
+        # Reinicia os workers com o novo tamanho de lote
+        iniciar_vision_workers(tamanho_lote=tamanho_lote)
 
         return jsonify({"message": f"Tamanho do lote atualizado para {tamanho_lote}."}), 200
 
