@@ -1,6 +1,6 @@
 
-path_captured: "/home/iury/Documents/Challenge 2026 - SPI/backend-SPI/assets/modelo/active_learning/dataset_captura"
-path_cured: "/home/iury/Documents/Challenge 2026 - SPI/backend-SPI/assets/modelo/active_learning/dataset_tratado"
+path_captured: "C:\\Users\\eduar\\OneDrive\\Documentos\\FIAP\\ABDI_Challenge\\backend-SPI\\assets\\modelo\\active_learning\\dataset_captura"
+path_cured: "C:\\Users\\eduar\\OneDrive\\Documentos\\FIAP\\ABDI_Challenge\\dataset_tratado"
 
 classes: {
   0: 'Pessoa',

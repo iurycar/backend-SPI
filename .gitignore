@@ -44,6 +44,7 @@ RELATORIO_IMPLEMENTACAO_BACKEND.md
 assets/alarme-esp32/
 processador.py
 tests/
+assets/config.yaml
 filtro.py
 split_val.py
 yolov8n.pt
