@@ -187,7 +187,7 @@ export function resizeBox(box, handle, pos) {
     let x2 = x + w;
     let y2 = y + h;
 
-    const minSize = 3; // Tamanho mínimo da caixa em pixels
+    const minSize = 16; // Tamanho mínimo da caixa em pixels
 
     if (handle === 'tl') { x = Math.min(pos.x, x2 - minSize); y = Math.min(pos.y, y2 - minSize); }
     if (handle === 'tr') { x2 = Math.max(pos.x, x + minSize); y = Math.min(pos.y, y2 - minSize); }

@@ -20,9 +20,18 @@ def favicon():
     return send_file(caminho_icone, mimetype='image/png')
 
 
-@curadoria_bp.route('/api/config', methods=['GET', 'POST'])
+@curadoria_bp.route('/api/config', methods=['GET'])
 @login_required
 def gerenciar_config():
+    print("Obtendo configuração atual...")
+    config = curadoria_service.obter_configuracao()
+    print("Configuração atual:", config)
+    return jsonify(config)
+
+
+@curadoria_bp.route('/api/config', methods=['POST'])
+@perfil_required('admin')
+def atualizar_config():
     if request.method == 'POST':
         dados = request.json or {}
         if not dados:
@@ -34,7 +43,7 @@ def gerenciar_config():
             return jsonify({"error": str(e)}), 400
 
         return jsonify(curadoria_service.atualizar_configuracao(config))
-    return jsonify(curadoria_service.obter_configuracao())
+    return jsonify({"error": "Método não permitido"}), 405
 
 
 @curadoria_bp.route('/api/classes', methods=['GET'])

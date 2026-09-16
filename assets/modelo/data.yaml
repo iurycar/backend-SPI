@@ -4,5 +4,5 @@ train: train/images
 val: val/images
 
 
-nc: 10
-names: ['Pessoa','Com_luva','Com_oculos','Com_capacete','Com_oculos_normal','Com_mascara','Sem_luva','Sem_oculos','Sem_capacete','Sem_mascara']
+nc: 13
+names: ['Pessoa','Com_luva','Com_oculos','Com_capacete','Com_oculos_normal','Com_mascara','Sem_luva','Sem_oculos','Sem_capacete','Sem_mascara', 'Com_colete','Sem_colete','Com_chapeu']

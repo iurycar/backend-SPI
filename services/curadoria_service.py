@@ -37,8 +37,22 @@ class CuradoriaService:
             with open(self.config_path, 'r') as f:
                 data = yaml.safe_load(f)
                 # Configura os caminhos de origem e destino com base no arquivo YAML
-                CURRENT_CONFIG["source_dir"] = data.get("path_captured", CURRENT_CONFIG["source_dir"])
-                CURRENT_CONFIG["target_dir"] = data.get("path_cured", CURRENT_CONFIG["target_dir"])
+                path_captured = data.get("path_captured", CURRENT_CONFIG["source_dir"])
+                path_cured = data.get("path_cured", CURRENT_CONFIG["target_dir"])
+
+                print(f"Carregando configuração do arquivo YAML: {self.config_path}")
+                print(f"Caminho de origem: {path_captured}")
+                print(f"Caminho de destino: {path_cured}")
+
+                if path_captured and os.path.exists(path_captured):
+                    CURRENT_CONFIG["source_dir"] = path_captured
+                else:
+                    print(f"⚠️ Caminho de origem inválido ou não encontrado: {path_captured}. Usando o caminho padrão.")
+
+                if path_cured and os.path.exists(path_cured):
+                    CURRENT_CONFIG["target_dir"] = path_cured
+                else:
+                    print(f"⚠️ Caminho de destino inválido ou não encontrado: {path_cured}. Usando o caminho padrão.")
 
                 self.class_names.update(data.get("classes", {}))
 
