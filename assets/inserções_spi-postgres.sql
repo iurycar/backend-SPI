@@ -26,9 +26,9 @@ INSERT INTO responsabilidade (id_usuario, id_setor) VALUES
 INSERT INTO cameras (nome, ip, id_setor, rotacao, espelhar_horizontal, espelhar_vertical) VALUES
 ('Fresa 1', 'rtsp://admin:SIDI2023@10.14.22.97:554/cam/realmonitor?channel=1&subtype=0', 1, 90, FALSE, FALSE),
 ('Fresa 2', 'rtsp://admin:SIDI2023@10.14.22.98:554/cam/realmonitor?channel=1&subtype=0', 1, 90, FALSE, FALSE),
-('Tenda', 'rtsp://admin:SIDI2023@10.14.22.99:554/cam/realmonitor?channel=1&subtype=0', 2, 0, FALSE, FALSE),
-('Sala 4', 'rtsp://admin:SIDI2023@10.14.24.6:554/cam/realmonitor?channel=1&subtype=0', 3, 0, FALSE, FALSE),
-('SICK Visionary-B Two', 'rtsp://10.14.22.96:554/video', 4, 0, TRUE, FALSE);
+('Tenda', 'rtsp://admin:Metaindustr!@@10.14.22.99:554/cam/realmonitor?channel=1&subtype=0', 2, 0, FALSE, FALSE),
+('Sala 4', 'rtsp://admin:Metaindustr!@@10.14.22.94:554/cam/realmonitor?channel=1&subtype=0', 3, 0, FALSE, FALSE),
+('SICK Visionary-B Two', 'rtsp://admin:Metaindustr!@@10.14.22.95:554/cam/realmonitor?channel=1&subtype=0', 4, 0, FALSE, FALSE);
 
 
 -- 5. POPULAR TABELA ZONAS (Depende de cameras)
@@ -52,10 +52,10 @@ INSERT INTO epis (nome, categoria, certificado, validade, estoque, quantidade_mi
 -- 7. POPULAR TABELA MONITORAR (Depende de zonas, cameras e epis)
 -- Regras de monitoramento ativas no sistema
 INSERT INTO monitorar (id_zona, id_epi) VALUES
-(1, 1),    -- Regra 1: Checar Capacete na Entrada Principal
-(2, 2),    -- Regra 2: Checar Óculos no Posto de Montagem 01
-(3, 3),    -- Regra 3: Checar Máscara de Solda na Célula de Solda 01
-(3, 4),    -- Regra 4: Checar Luva de Proteção na Célula de Solda 01
+(1, 1),    -- Regra 1: Checar Capacete na Fresa 1
+(2, 2),    -- Regra 2: Checar Óculos na Fresa 2
+(3, 3),    -- Regra 3: Checar Máscara na Fresa 2
+(3, 4),    -- Regra 4: Checar Luva de Sala 4
 (4, NULL); -- Regra 5: Detecção de intrusão no Perímetro Restrito (sem EPI associado)
 
 
