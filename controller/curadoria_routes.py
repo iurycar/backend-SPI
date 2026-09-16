@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request, render_template, send_file, session
+from flask import Blueprint, current_app, jsonify, request, render_template, send_file, session
 from services.curadoria_service import CuradoriaService
 from core.auth import login_required, perfil_required
 from schemas.config_dto import ConfigDTO
@@ -12,6 +12,12 @@ curadoria_bp = Blueprint('curadoria', __name__)
 @login_required
 def index():
     return render_template('curadoria.html')
+
+
+@curadoria_bp.route('/curadoria/favicon.png')
+def favicon():
+    caminho_icone = os.path.join(current_app.root_path, 'assets', 'modelo', 'icons.png')
+    return send_file(caminho_icone, mimetype='image/png')
 
 
 @curadoria_bp.route('/api/config', methods=['GET', 'POST'])
