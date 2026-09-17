@@ -30,13 +30,13 @@ app.secret_key = os.getenv('SECRET_KEY')
 # Configuração da Sessão no Redis
 app.config['SESSION_TYPE'] = 'redis' # Configura o tipo de sessão para usar Redis
 app.config['SESSION_PERMANENT'] = True # Define a sessão como permanente
-app.config['SESSION_SESSION_LIFETIME'] = timedelta(hours=8)
+app.config['SESSION_SESSION_LIFETIME'] = timedelta(hours=1)
 app.config['SESSION_USE_SIGNER'] = True # Habilita a assinatura do cookie de sessão para maior segurança
 app.config['SESSION_REDIS'] = redis.Redis.from_url(REDIS_URL) # Define a URL do Redis para armazen
 
 Session(app)  # Inicializa a sessão do Flask
 
-socketio.init_app(app, cors_allowed_origins="*", message_queue=REDIS_URL)  # Inicializa o SocketIO com o aplicativo Flask
+socketio.init_app(app, cors_allowed_origins="*", message_queue=REDIS_URL, async_mode='threading')  # Inicializa o SocketIO com o aplicativo Flask
 register_socket_events(socketio)  # Registra os eventos do WebSocket
 
 DEV_INSECURE = os.getenv('DEV_INSECURE', 'false').lower() == 'true'
