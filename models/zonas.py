@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 @dataclass
 class Zona:
@@ -10,6 +10,6 @@ class Zona:
     largura: float = 1.0
     altura: float = 1.0
     permitido: bool = True
-    epis_categoria: list[str] | None = None
+    epis_categoria: list[str] = field(default_factory=list)
+    id_monitorar: list[int] | None = None
     regiao: list[tuple[int, int]] | None = None
-    id_monitorar: int | None = None
