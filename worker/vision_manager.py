@@ -2,7 +2,7 @@ from worker.vision_worker import VisionWorker
 
 workers: dict[int, VisionWorker] = {}
 
-def iniciar_vision_workers(cameras_id: list[int], tamanho_lote: int = 5):
+def iniciar_vision_workers(cameras_id: list[int], tamanho_lote: int = 6):
     """
     Inicia os VisionWorkers agrupando as câmeras em lotes.
     """

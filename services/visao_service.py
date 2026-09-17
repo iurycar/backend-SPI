@@ -1,19 +1,20 @@
-from collections import defaultdict
-from core.vision_metrics import FrameMetrics
 from core.alerta_diagnostics import trace_alert_candidate
 from core.tipo_deteccao import TIPOS_POSTURA
+from core.vision_metrics import FrameMetrics
+from collections import defaultdict
 from extensions import REDIS_URL
 from ultralytics import YOLO
 import numpy as np
 import threading
 import platform
+import psycopg2
+import logging
 import redis
 import math
 import time
 import cv2
 import os
-import logging
-import psycopg2
+
 
 from repository.monitoramento_repository import MonitoramentoRepository
 from repository.setores_repository import SetoresRepository
@@ -32,6 +33,7 @@ class VisaoService:
     EPI_CLASSE_POR_LABEL = {
         'com_capacete': 'capacete',
         'sem_capacete': 'capacete',
+        'com_chapeu': 'capacete',
         'com_luva': 'luva',
         'sem_luva': 'luva',
         'com_oculos': 'oculos',
@@ -39,6 +41,8 @@ class VisaoService:
         'sem_oculos': 'oculos',
         'com_mascara': 'mascara',
         'sem_mascara': 'mascara',
+        'com_colete': 'colete',
+        'sem_colete': 'colete'
     }
 
     CORES = {
@@ -123,11 +127,10 @@ class VisaoService:
             if ip.startswith("rtsp://"):
                 print(f"🔗 Conectando ao RTSP da câmera {camera_id}: {ip}")
 
-                # stimeout em microssegundos: 5000000 = 5 segundos (evita travar por 30s)
-                # rtsp_transport: tcp evita pacotes UDP fragmentados e 'error while decoding MB'
                 os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = (
                     "rtsp_transport;tcp|"
-                    "stimeout;5000000|"
+                    "stimeout;3000000|"
+                    "rw_timeout;3000000|"
                     "max_delay;500000|"
                     "buffer_size;2048000"
                 )
@@ -167,25 +170,6 @@ class VisaoService:
 
                 except Exception as e:
                     print(f"❌ Erro ao abrir webcam local para a câmera {camera_id}: {e}")
-
-        # ---------------------------------------- REMOVER ----------------------------------------
-        # Esse fallback é apenas para desenvolvimento local, quando não há câmeras RTSP disponíveis.
-        print(f"❌ Falha ao abrir RTSP da câmera {camera_id}. Tentando fallback para webcam local.")
-        backend = self.get_plataform_camera()
-        
-        # Abre diretamente sem testar/fechar antes, evitando 'Device busy'
-        with self._webcam_lock:
-            for index in (0, 1, 2):
-                cap = cv2.VideoCapture(index, backend)
-                if cap.isOpened():
-                    sucesso, _ = cap.read()
-                    if sucesso:
-                        print(f"✅ Webcam local conectada com sucesso no índice {index}")
-                        # Descarta mais um frame para estabilizar o sensor de exposição
-                        cap.read()
-                        self.cap = cap
-                        return self.cap
-                    cap.release()
 
         print("❌ Nenhuma câmera disponível encontrada.")
         self.cap = None
@@ -1030,16 +1014,21 @@ class VisaoService:
 
         # Evita alertas duplicados para o mesmo track_id e motivo dentro de um período de 30 segundos
         acquired = self.redis_client.set(cache_chave, "1", ex=30, nx=True)
+
         trace_alert_candidate('postura', camera_id, None, motivo, track_id, acquired)
+
         if not acquired:
             return
 
         try:
             setor = self.setores_repository.get_setor_por_id_camera(camera_id)
+
             if not setor:
                 logger.warning('Câmera/setor inexistente ao registrar postura: %s.', camera_id)
                 return
+
             responsaveis = self.setores_repository.get_responsaveis_por_setor(setor.id)
+
             sucesso = self.alertas_service.criar_alerta(
                 monitoramento=None,
                 id_usuario=responsaveis[0] if responsaveis else None,
@@ -1052,9 +1041,11 @@ class VisaoService:
 
             if sucesso:
                 print(f"⚠️ Má postura detectada - ID: {track_id}")
+
         except psycopg2.Error as exc:
             self.connection.rollback()
             logger.warning('Falha ao registrar postura da câmera %s (SQLSTATE %s).', camera_id, exc.pgcode)
+
         except (ValueError, redis.exceptions.RedisError) as exc:
             logger.warning('Falha ao registrar/notificar postura da câmera %s: %s.', camera_id, exc)
 

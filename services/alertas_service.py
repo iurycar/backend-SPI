@@ -4,7 +4,7 @@ from services.usuario_service import UsuarioService
 from services.cameras_service import CamerasService
 from services.setores_service import SetoresService
 
-from extensions import emitir_evento_global
+from extensions import emitir_evento_setor, emitir_evento_global
 
 from datetime import datetime, timedelta
 
@@ -80,17 +80,20 @@ class AlertasService:
 
         return sucesso
 
-    def registrar_alertas_com_notificacao_unica(self, monitoramento: Zona | dict,
-                                              responsaveis: list[int] | None, evento: str,
-                                              severidade: int = 1, *, tipo_deteccao: str = 'epi') -> bool:
-        """
-        Salva o alerta no banco para cada responsável, mas emite apenas 1 evento no WebSocket.
-        """
-
+    def registrar_alertas_com_notificacao_unica(self, 
+                                                monitoramento: Zona | dict,
+                                                responsaveis: list[int] | None, 
+                                                evento: str,
+                                                severidade: int = 1, 
+                                                *, 
+                                                tipo_deteccao: str = 'epi') -> bool:
         id_monitorar = self._campo_monitoramento(monitoramento, 'id_monitorar')
         validar_vinculo_alerta(tipo_deteccao, id_monitorar, None)
         usuarios_registrados = []
-        for responsavel_id in responsaveis or [None]:
+        
+        lista_responsaveis = responsaveis if responsaveis else [None]
+
+        for responsavel_id in lista_responsaveis:
             sucesso = self.alertas_repository.criar_alerta(
                 id_monitorar, responsavel_id, evento, severidade, tipo_deteccao=tipo_deteccao
             )
@@ -105,13 +108,19 @@ class AlertasService:
         if not usuarios_registrados:
             return False
 
-        # O evento único referencia o primeiro registro efetivamente salvo.
         payload_notificacao = self._montar_payload_alerta(
             monitoramento, usuarios_registrados[0], evento, severidade, tipo_deteccao=tipo_deteccao
         )
 
-        print(f"Alerta emitido via WebSocket: {payload_notificacao}")
-        emitir_evento_global('novo_alerta', payload_notificacao)
+        if severidade == 3:
+            emitir_evento_global('novo_alerta', payload_notificacao)
+        else:
+            id_zona = self._campo_monitoramento(monitoramento, 'id') or self._campo_monitoramento(monitoramento, 'id_zona')
+            setor = self.setores_service.obter_setor_por_id_zona(id_zona)
+            if setor:
+                id_setor = setor.get('id') if isinstance(setor, dict) else getattr(setor, 'id', None)
+                if id_setor:
+                    emitir_evento_setor('novo_alerta', payload_notificacao, id_setor=id_setor)
 
         return True
 
@@ -124,13 +133,17 @@ class AlertasService:
         ) -> bool:
         
         id_monitorar = self._campo_monitoramento(monitoramento, 'id_monitorar')
+
         validar_vinculo_alerta(tipo_deteccao, id_monitorar, id_camera)
+
         if tipo_deteccao in TIPOS_POSTURA and monitoramento is not None:
             raise ValueError('Postura não aceita contexto de zona ou monitoramento.')
+
         payload_notificacao = self._montar_payload_alerta(
             monitoramento, id_usuario, evento, severidade,
             tipo_deteccao=tipo_deteccao, id_camera=id_camera
         )
+
         sucesso = self.alertas_repository.criar_alerta(
             id_monitorar, id_usuario, evento, severidade,
             tipo_deteccao=tipo_deteccao, id_camera=id_camera
@@ -138,12 +151,11 @@ class AlertasService:
 
         if not sucesso:
             return False
-
-        # Emite apenas 1 evento no WebSocket
-        emitir_evento_global('novo_alerta', payload_notificacao)
-
+        
         # Dispara e-mail para todos os responsáveis se for severidade 3
         if severidade == 3:
+            emitir_evento_global('novo_alerta', payload_notificacao)
+
             lista_envio = destinatarios or ([id_usuario] if id_usuario else [])
             for usuario_id in lista_envio:
                 self._enviar_email_alerta_critico(
@@ -151,12 +163,31 @@ class AlertasService:
                     payload_notificacao['nome_camera'], payload_notificacao['nome_setor'],
                     evento, severidade
                 )
+        else:
+            id_setor = None
+            if id_camera is not None:
+                camera = self.cameras_service.obter_camera_por_id(id_camera)
+    
+                if camera:
+                    id_setor = camera.get('id_setor')
+    
+            elif monitoramento is not None:
+                id_zona = self._campo_monitoramento(monitoramento, 'id') or self._campo_monitoramento(monitoramento, 'id_zona')
+                setor = self.setores_service.obter_setor_por_id_zona(id_zona)
+    
+                if setor:
+                    id_setor = setor.get('id')
+    
+            if id_setor is not None:
+                emitir_evento_setor('novo_alerta', payload_notificacao, id_setor=id_setor)
+
         return True
 
     @staticmethod
     def _campo_monitoramento(monitoramento: Zona | dict | None, campo: str):
         if isinstance(monitoramento, dict):
             return monitoramento.get(campo)
+        
         return getattr(monitoramento, campo, None)
 
     def _montar_payload_alerta(self, monitoramento: Zona | dict | None, id_usuario: int | None,

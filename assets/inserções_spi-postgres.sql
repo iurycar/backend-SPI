@@ -28,7 +28,8 @@ INSERT INTO cameras (nome, ip, id_setor, rotacao, espelhar_horizontal, espelhar_
 ('Fresa 2', 'rtsp://admin:SIDI2023@10.14.22.98:554/cam/realmonitor?channel=1&subtype=0', 1, 90, FALSE, FALSE),
 ('Tenda', 'rtsp://admin:Metaindustr!@@10.14.22.99:554/cam/realmonitor?channel=1&subtype=0', 2, 0, FALSE, FALSE),
 ('Sala 4', 'rtsp://admin:Metaindustr!@@10.14.22.94:554/cam/realmonitor?channel=1&subtype=0', 3, 0, FALSE, FALSE),
-('SICK Visionary-B Two', 'rtsp://admin:Metaindustr!@@10.14.22.95:554/cam/realmonitor?channel=1&subtype=0', 4, 0, FALSE, FALSE);
+('SICK Visionary-B Two', 'rtsp://admin:Metaindustr!@@10.14.22.95:554/cam/realmonitor?channel=1&subtype=0', 4, 0, FALSE, FALSE),
+('Webcam 1', 'local-webcam:0', 4, 0, FALSE, FALSE); -- Câmera de teste local (para desenvolvimento)
 
 
 -- 5. POPULAR TABELA ZONAS (Depende de cameras)
@@ -46,7 +47,8 @@ INSERT INTO epis (nome, categoria, certificado, validade, estoque, quantidade_mi
 ('Capacete de Segurança H-700', 'Capacete', 'CA-12345', '2027-12-31', 50,  5,  6),
 ('Óculos de Proteção Incolor',  'Oculos',   'CA-67890', '2026-10-15', 120, 12, 4),
 ('Máscara de Solda Automática', 'Mascara',  'CA-11223', '2028-05-20', 30,  5, 10),
-('Luva de Proteção Soldador',   'Luva',     'CA-44556', '2028-05-20', 15,  3,  8);
+('Luva de Proteção Soldador',   'Luva',     'CA-44556', '2028-05-20', 15,  3,  8),
+('Colete de Proteção',          'Colete',   'CA-77889', '2029-01-10', 20,  4,  5);
 
 
 -- 7. POPULAR TABELA MONITORAR (Depende de zonas, cameras e epis)
@@ -56,6 +58,7 @@ INSERT INTO monitorar (id_zona, id_epi) VALUES
 (2, 2),    -- Regra 2: Checar Óculos na Fresa 2
 (3, 3),    -- Regra 3: Checar Máscara na Fresa 2
 (3, 4),    -- Regra 4: Checar Luva de Sala 4
+(3, 5),    -- Regra 4: Checar Colete de Sala 4
 (4, NULL); -- Regra 5: Detecção de intrusão no Perímetro Restrito (sem EPI associado)
 
 

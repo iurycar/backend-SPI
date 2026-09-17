@@ -7,6 +7,7 @@ import time
 def trace_alert_candidate(kind, camera_id, zone_id, event, track_id, acquired):
     if os.getenv('ALERT_DIAGNOSTICS', 'false').lower() != 'true':
         return
+    
     print(json.dumps({
         'diagnostic': 'alert_candidate', 'timestamp': time.time(),
         'kind': kind, 'camera_id': camera_id, 'zone_id': zone_id,
