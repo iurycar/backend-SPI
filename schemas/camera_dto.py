@@ -4,7 +4,7 @@ from dataclasses import dataclass
 class CameraDTO:
     ip: str
     id_setor: int
-    nome: str | None = None
+    nome: str = ""
     rotacao: int = 0
     espelhar_horizontal: bool = False
     espelhar_vertical: bool = False
@@ -17,7 +17,7 @@ class CameraDTO:
 
         ip = data.get('ip')
         id_setor = data.get('id_setor')
-        nome = data.get('nome')
+        nome = data.get('nome', "Sem nome definido")
         rotacao = data.get('rotacao', 0)
         espelhar_horizontal = data.get('espelhar_horizontal', False)
         espelhar_vertical = data.get('espelhar_vertical', False)
@@ -28,19 +28,19 @@ class CameraDTO:
         if id_setor is None or not isinstance(id_setor, int):
             raise ValueError("Invalid or missing 'id_setor' field. It must be an integer.")
 
-        if nome is not None and not isinstance(nome, str):
+        if nome is None or not isinstance(nome, str):
             raise ValueError("Invalid 'nome' field. It must be a string or None.")
 
-        if rotacao is not None and not isinstance(rotacao, int):
+        if rotacao is None or not isinstance(rotacao, int):
             raise ValueError("Invalid 'rotacao' field. It must be an integer.")
 
-        if rotacao is not None and rotacao not in [0, 90, 180, 270]:
+        if rotacao is None or rotacao not in [0, 90, 180, 270]:
             raise ValueError("Invalid 'rotacao' field. It must be one of the following values: 0, 90, 180, 270.")
 
-        if not isinstance(espelhar_horizontal, bool):
+        if espelhar_horizontal is None or not isinstance(espelhar_horizontal, bool):
             raise ValueError("Invalid 'espelhar_horizontal' field. It must be a boolean.")
 
-        if not isinstance(espelhar_vertical, bool):
+        if espelhar_vertical is None or not isinstance(espelhar_vertical, bool):
             raise ValueError("Invalid 'espelhar_vertical' field. It must be a boolean.")
 
         return cls(

@@ -104,7 +104,7 @@ class VisaoService:
         # FFmpeg = Biblioteca de código aberto para processar vídeo e áudio, usada aqui para capturar o stream RTSP.
         # TCP = Transmission Control Protocol, garante entrega confiável de dados, usado aqui para reduzir perda de frames no stream RTSP.
 
-        rtsp_url = None
+        ip = None
 
         try:
             # Busca os dados da câmera por ID
@@ -112,39 +112,64 @@ class VisaoService:
 
             if camera:
                 # Pega o RTSP da câmera
-                rtsp_url = camera.get('ip') if isinstance(camera, dict) else getattr(camera, 'ip', None)
+                ip = camera.get('ip') if isinstance(camera, dict) else getattr(camera, 'ip', None)
 
         except Exception as e:
             print(f"❌ Erro ao obter RTSP da câmera {camera_id}: {e}")
 
 
         # Se tiver URL RTSP, abre via FFMPEG forçando TCP
-        if rtsp_url:
-            print(f"🔗 Conectando ao RTSP da câmera {camera_id}: {rtsp_url}")
+        if ip:
+            if ip.startswith("rtsp://"):
+                print(f"🔗 Conectando ao RTSP da câmera {camera_id}: {ip}")
 
-            # stimeout em microssegundos: 5000000 = 5 segundos (evita travar por 30s)
-            # rtsp_transport: tcp evita pacotes UDP fragmentados e 'error while decoding MB'
-            os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = (
-                "rtsp_transport;tcp|"
-                "stimeout;5000000|"
-                "max_delay;500000|"
-                "buffer_size;2048000"
-            )
+                # stimeout em microssegundos: 5000000 = 5 segundos (evita travar por 30s)
+                # rtsp_transport: tcp evita pacotes UDP fragmentados e 'error while decoding MB'
+                os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = (
+                    "rtsp_transport;tcp|"
+                    "stimeout;5000000|"
+                    "max_delay;500000|"
+                    "buffer_size;2048000"
+                )
 
-            cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
+                cap = cv2.VideoCapture(ip, cv2.CAP_FFMPEG)
 
-            # Configura timeouts nativos do OpenCV caso a versão do build suporte
-            cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000)
-            cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000)
-            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                # Configura timeouts nativos do OpenCV caso a versão do build suporte
+                cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000)
+                cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000)
+                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
-            if cap.isOpened():
-                self.cap = cap
-                return self.cap
-            else:
-                cap.release()
+                if cap.isOpened():
+                    self.cap = cap
+                    return self.cap
+                else:
+                    cap.release()
+            # Se a URL for uma webcam local, tenta abrir diretamente
+            elif ip.lower().startswith("local-webcam"):
+                try:
+                    # Vai receber o índice da webcam local, ex: "local-webcam:0"
+                    index = int(ip.split(":")[1])
 
-        # 2. Fallback para webcam local
+                    backend = self.get_plataform_camera()
+
+                    cap = cv2.VideoCapture(index, backend)
+
+                    if cap.isOpened():
+                        sucesso, _ = cap.read()
+
+                        if sucesso:
+                            print(f"✅ Webcam local conectada com sucesso no índice {index}")
+                            cap.read()
+                            self.cap = cap
+                            return self.cap
+
+                    cap.release()
+
+                except Exception as e:
+                    print(f"❌ Erro ao abrir webcam local para a câmera {camera_id}: {e}")
+
+        # ---------------------------------------- REMOVER ----------------------------------------
+        # Esse fallback é apenas para desenvolvimento local, quando não há câmeras RTSP disponíveis.
         print(f"❌ Falha ao abrir RTSP da câmera {camera_id}. Tentando fallback para webcam local.")
         backend = self.get_plataform_camera()
         

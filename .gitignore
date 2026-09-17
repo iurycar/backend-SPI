@@ -39,6 +39,7 @@ assets/modelo/active_learning/dataset_tratado/val/images
 assets/modelo/active_learning/dataset_tratado/val/labels
 assets/modelo/active_learning/dataset_tratado/train/labels.cache
 assets/modelo/active_learning/dataset_tratado/val/labels.cache
+assets/modelo/active_learning/dataset_treinado/
 PLANO_INTEGRACAO_BACKEND.md
 RELATORIO_IMPLEMENTACAO_BACKEND.md
 assets/alarme-esp32/
@@ -49,5 +50,5 @@ filtro.py
 split_val.py
 yolov8n.pt
 yolov8m-pose.pt
-assets/modelo/treinamento/runs/
 yolov8s-pose.pt
+assets/modelo/treinamento/runs/
