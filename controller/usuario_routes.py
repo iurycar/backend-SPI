@@ -69,7 +69,7 @@ def create_user_bp(connection):
         if 'user_id' not in session:
             return jsonify({'message': 'Não autenticado'}), 401
 
-        ativo = usuario_service.obter_status_ativo(session.get('email'))
+        ativo = usuario_service.obter_status_ativo(session.get('user_email'))
 
         if not ativo:
             session.clear()

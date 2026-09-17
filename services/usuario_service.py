@@ -43,10 +43,10 @@ class UsuarioService:
 
         return None
 
-    def obter_usuario_ativo_por_email(self, email: str) -> bool:
+    def obter_status_ativo(self, email: str) -> bool:
         usuario = self.user_repository.get_usuario_por_email(email)
 
-        if usuario and usuario.ativo:
-            return usuario.ativo
+        if usuario and usuario.is_ativo:
+            return usuario.is_ativo
 
         return False
