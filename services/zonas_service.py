@@ -24,7 +24,8 @@ class ZonasService:
                 'largura': zona.largura,
                 'altura': zona.altura,
                 'permitido': zona.permitido,
-                'id_camera': zona.id_camera
+                'id_camera': zona.id_camera,
+                'epis_categoria': zona.epis_categoria,
             }
 
             zonas_lista.append(zona_dict)
@@ -43,7 +44,8 @@ class ZonasService:
                 'largura': zona.largura,
                 'altura': zona.altura,
                 'permitido': zona.permitido,
-                'id_camera': zona.id_camera
+                'id_camera': zona.id_camera,
+                'epis_categoria': zona.epis_categoria,
             }
 
         return None
@@ -75,7 +77,8 @@ class ZonasService:
                     'largura': zona.largura,
                     'altura': zona.altura,
                     'permitido': zona.permitido,
-                    'id_camera': zona.id_camera
+                    'id_camera': zona.id_camera,
+                    'epis_categoria': zona.epis_categoria,
                 }
                 zonas_lista.append(zona_dict)
 
@@ -105,11 +108,11 @@ class ZonasService:
             zona_dto.largura,
             zona_dto.altura,
             zona_dto.permitido,
-            id_epi=zona_dto.id_epi
+            ids_epis=zona_dto.ids_epis
         )
 
         if zona:
-            redis_client.delete(f"cache:zonas:camera:{zona.id_camera}")  # Invalida o cache para a câmera afetada
+            redis_client.delete(f"cache:zonas:camera:{zona.id_camera}")
 
             return {
                 'id': zona.id,
@@ -119,7 +122,8 @@ class ZonasService:
                 'largura': zona.largura,
                 'altura': zona.altura,
                 'permitido': zona.permitido,
-                'id_camera': zona.id_camera
+                'id_camera': zona.id_camera,
+                'epis_categoria': zona.epis_categoria,
             }
 
         return None
@@ -141,7 +145,8 @@ class ZonasService:
             zona_dto.y,
             zona_dto.largura,
             zona_dto.altura,
-            zona_dto.permitido
+            zona_dto.permitido,
+            ids_epis=zona_dto.ids_epis
         )
 
         if zona:
@@ -154,16 +159,17 @@ class ZonasService:
                 'largura': zona.largura,
                 'altura': zona.altura,
                 'permitido': zona.permitido,
-                'id_camera': zona.id_camera
+                'id_camera': zona.id_camera,
+                'epis_categoria': zona.epis_categoria,
             }
 
         return None
 
     def deletar_zona(self, zona_id: int) -> bool:
+        zona = self.zonas_repository.obter_zona_por_id(zona_id)
         sucesso = self.zonas_repository.deletar_zona(zona_id)
         if sucesso:
             # Encontra a zona deletada para invalidar o cache
-            zona = self.zonas_repository.obter_zona_por_id(zona_id)
             if zona:
                 redis_client.delete(f"cache:zonas:camera:{zona.id_camera}")  # Invalida o cache para a câmera afetada
         return sucesso

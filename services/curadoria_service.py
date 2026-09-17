@@ -40,10 +40,6 @@ class CuradoriaService:
                 path_captured = data.get("path_captured", CURRENT_CONFIG["source_dir"])
                 path_cured = data.get("path_cured", CURRENT_CONFIG["target_dir"])
 
-                print(f"Carregando configuração do arquivo YAML: {self.config_path}")
-                print(f"Caminho de origem: {path_captured}")
-                print(f"Caminho de destino: {path_cured}")
-
                 if path_captured and os.path.exists(path_captured):
                     CURRENT_CONFIG["source_dir"] = path_captured
                 else:

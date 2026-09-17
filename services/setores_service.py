@@ -10,6 +10,9 @@ class SetoresService:
 
             setores = self.setores_repository.get_setores()
 
+            if setores == []:
+                return setores_lista
+            
             for setor in setores:
                 setor_dict = {
                     'id': setor.id,

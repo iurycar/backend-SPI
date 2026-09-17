@@ -1,3 +1,4 @@
+from services import zonas_service
 from worker.vision_manager import notificar_atualizacao_zonas
 from core.auth import login_required, perfil_required
 from services.zonas_service import ZonasService
@@ -64,9 +65,9 @@ def create_zonas_bp(connection):
     @zonas_bp.route('/zonas/<int:zona_id>', methods=['DELETE'])
     @login_required
     def deletar_zona(zona_id):
-        sucesso = zonas_service.deletar_zona(zona_id)
         camera_id = zonas_service.obter_id_camera_por_zona(zona_id)
-
+        sucesso = zonas_service.deletar_zona(zona_id)
+        
         if sucesso:
             if camera_id is not None:
                 notificar_atualizacao_zonas(camera_id)
