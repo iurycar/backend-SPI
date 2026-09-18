@@ -19,6 +19,7 @@ class VisionWorker:
         self.process = None
         self.stop_event = None
         self.reload_zones_events = {}
+        self.reload_camera_events = {}
         self.frame_queues = {}
         self.last_results = None
 
@@ -69,6 +70,26 @@ class VisionWorker:
                 if event:
                     event.set()
                     print(f"🔄 Worker de visão para a câmera {cam_id} recebeu sinal para recarregar zonas.")
+
+
+    def update_camera(self, camera_id: int) -> None:
+        """
+            Atualiza o worker para incluir uma nova câmera ou alterar uma existente.
+        """
+        if camera_id not in self.cameras:
+            self.cameras.append(camera_id)
+            print(f"🔄 Worker de visão atualizado para incluir/alterar a câmera {camera_id}.")
+
+        print(f"🔄 Worker de visão para a câmera {camera_id} recebeu sinal para atualizar informações da câmera.")
+
+        self.stop() # Para garantir que o worker seja reiniciado com a nova configuração, paramos o processo atual.
+
+        self.frame_queues.clear()
+        self.reload_zones_events.clear()
+
+        self.start()
+        print(f"✅ Worker de visão reiniciado para a câmera {camera_id} com as novas configurações.")
+        
 
 
     def stop(self) -> None:
