@@ -20,3 +20,7 @@ class EstatisticasService:
         estatisticas = self.estatisticas_repository.get_estatisticas_por_setor(setor_id, intervalo_dto.data_inicio, intervalo_dto.data_fim)
 
         return estatisticas
+
+    def armazenar_estatisticas(self, id_setor, total_deteccoes, total_conformes, total_nao_conformes) -> bool:
+        """Armazena as estatísticas no banco de dados"""
+        return self.estatisticas_repository.armazenar_estatisticas(id_setor, total_deteccoes, total_conformes, total_nao_conformes)

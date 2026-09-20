@@ -13,6 +13,7 @@ from services.cameras_service import CamerasService
 from extensions import socketio, REDIS_URL
 from connection.conn import Connection
 
+from controller.estatisticas_routes import create_estatisticas_bp
 from controller.cameras_routes import create_cameras_bp
 from controller.setores_routes import create_setores_bp
 from controller.alertas_routes import create_alertas_bp
@@ -66,6 +67,7 @@ else:
 # Cria a classe conexão, para ser passada para os blueprints
 conn = Connection()
 
+app.register_blueprint(create_estatisticas_bp(conn.get_connection()))
 app.register_blueprint(create_cameras_bp(conn.get_connection()))
 app.register_blueprint(create_setores_bp(conn.get_connection()))
 app.register_blueprint(create_alertas_bp(conn.get_connection()))

@@ -69,3 +69,21 @@ class EstatisticasRepository:
                 conformidade_evolucao.append(dict(resultado))
 
             return conformidade_evolucao
+
+    def armazenar_estatisticas(self, id_setor, total_deteccoes, total_conformes, total_nao_conformes) -> bool:
+        """Armazena as estatísticas no banco de dados"""
+        try:
+            with self.conn.cursor() as cursor:
+                insert_query = """
+                    INSERT INTO estatisticas (id_setor, total_deteccoes, total_conformes, total_nao_conformes)
+                    VALUES (%s, %s, %s, %s)
+                """
+                
+                cursor.execute(insert_query, (id_setor, total_deteccoes, total_conformes, total_nao_conformes))
+                self.conn.commit()
+                
+            return True
+        except Exception as e:
+            print(f"Erro ao armazenar estatísticas: {e}")
+            self.conn.rollback()
+            return False
