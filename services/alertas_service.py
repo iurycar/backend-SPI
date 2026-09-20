@@ -8,19 +8,14 @@ from extensions import emitir_evento_setor, emitir_evento_global
 
 from datetime import datetime, timedelta
 
-from models.cameras import Camera
-from models.setores import Setor
 from models.zonas import Zona
+
 from core.tipo_deteccao import TIPOS_POSTURA, validar_vinculo_alerta
 
 from tasks.email_task import task_enviar_email_alerta_critico
 from extensions import redis_client, emitir_evento_global
 from tasks.alarme_task import enviar_comando
 from rq import Queue
-
-from email.message import EmailMessage
-import smtplib
-import os
 
 email_queue = Queue('emails', connection=redis_client)  # Cria uma fila de tarefas para envio de e-mails
 

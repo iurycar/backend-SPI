@@ -143,3 +143,18 @@ CREATE TABLE alertas (
          AND id_monitorar IS NULL AND id_camera IS NOT NULL)
     )
 );
+
+-- ========================================================
+-- TABELA: estatisticas (para armazenar estatísticas do sistema)
+-- ========================================================
+CREATE TABLE estatisticas (
+    id_estatistica      BIGINT      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    data_hora           TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    id_setor            INTEGER     REFERENCES setores(id_setor) ON DELETE CASCADE,
+    total_deteccoes     INTEGER     NOT NULL DEFAULT 0,
+    total_conformes     INTEGER     NOT NULL DEFAULT 0,
+    total_nao_conformes INTEGER     NOT NULL DEFAULT 0
+);
+
+CREATE INDEX idx_estatisticas_data_hora ON estatisticas (data_hora);
+CREATE INDEX idx_estatisticas_setor_data ON estatisticas (id_setor, data_hora);
