@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request, session
 from services.usuario_service import UsuarioService
-import schemas.usuario_dto as usuario_dto
+from schemas.usuario_dto import LoginDTO, SignupDTO
 from core.errors import ValidationError
 from core.auth import perfil_required
 
@@ -14,7 +14,7 @@ def create_user_bp(connection):
         data = request.get_json()
 
         try:    
-            login_dto = usuario_dto.LoginDTO.from_dict(data)
+            login_dto = LoginDTO.from_dict(data)
 
             user = usuario_service.login(login_dto.email, login_dto.password)
 
@@ -100,7 +100,7 @@ def create_user_bp(connection):
         data = request.get_json()
 
         try:
-            signup_dto = usuario_dto.SignupDTO.from_dict(data)
+            signup_dto = SignupDTO.from_dict(data)
             user = usuario_service.signup(
                 signup_dto.email, 
                 signup_dto.password, 
@@ -172,6 +172,17 @@ def create_user_bp(connection):
 
         except Exception as e:
             print(f"Erro ao deletar usuário: {e}")
+            return jsonify({'message': 'Erro interno do servidor'}), 500
+
+    @user_bp.route('/users/ativos', methods=['GET'])
+    @perfil_required('admin')
+    def listar_usuarios_ativos():
+        try:
+            usuarios = usuario_service.listar_usuarios_ativos()
+
+            return jsonify(usuarios), 200
+        except Exception as e:
+            print(f"Erro ao listar usuários ativos: {e}")
             return jsonify({'message': 'Erro interno do servidor'}), 500
 
     return user_bp

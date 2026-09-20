@@ -102,3 +102,24 @@ class UsuarioService:
         if sucesso:
             return True
         return False
+
+    def listar_usuarios_ativos(self) -> list[dict]:
+        usuarios = self.user_repository.listar_usuarios_ativos()
+
+        lista_usuarios = []
+
+        if usuarios:
+            for usuario in usuarios:
+                lista_usuarios.append({
+                    'id': usuario.get_id(),
+                    'nome': usuario.get_nome(),
+                    'sobrenome': usuario.get_sobrenome(),
+                    'email': usuario.get_email(),
+                    'perfil': usuario.get_perfil(),
+                    'unidade': usuario.get_unidade(),
+                    'telefone': usuario.get_telefone(),
+                    'admin': usuario.is_admin,
+                    'ativo': usuario.is_ativo
+                })
+
+        return lista_usuarios
