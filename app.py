@@ -89,6 +89,6 @@ if __name__ == '__main__':
         for camera in cameras_service.listar_cameras():
             cameras_id.append(camera['id'])
 
-        iniciar_vision_workers(cameras_id=cameras_id, tamanho_lote=5)
+        iniciar_vision_workers(cameras_id=cameras_id, tamanho_lote=6)
 
     socketio.run(app, host='0.0.0.0', port=5000, debug=True, use_reloader=False)
