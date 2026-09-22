@@ -70,10 +70,10 @@ INSERT INTO alarmes (endereco, id_monitorar) VALUES
 -- 9. POPULAR TABELA ALERTAS (Depende de monitorar e usuarios)
 -- Alertas gerados pelo sistema por falta de EPI
 INSERT INTO alertas (resolvido, data_hora, id_monitorar, id_usuario, evento, severidade) VALUES
-(TRUE,  CURRENT_TIMESTAMP - INTERVAL '2 hours',    1, 1,    'Operador sem capacete detectado', 2),
-(FALSE, CURRENT_TIMESTAMP - INTERVAL '30 minutes', 2, 2,    'Operador sem óculos de proteção', 1),
-(FALSE, CURRENT_TIMESTAMP - INTERVAL '5 minutes',  3, NULL, 'Falta de máscara em arco elétrico ativo', 3),
-(FALSE, CURRENT_TIMESTAMP - INTERVAL '1 minute',   5, NULL, 'Acesso não autorizado a zona restrita', 3);
+(TRUE,  CURRENT_TIMESTAMP - INTERVAL '2 hours',    1, 1,    'Sem EPI necessário: capacete', 2),
+(FALSE, CURRENT_TIMESTAMP - INTERVAL '30 minutes', 2, 2,    'Equipamento inadequado: oculos', 1),
+(FALSE, CURRENT_TIMESTAMP - INTERVAL '5 minutes',  3, NULL, 'Sem EPI necessário: mascara', 3),
+(FALSE, CURRENT_TIMESTAMP - INTERVAL '1 minute',   5, NULL, 'Pessoa em zona restrita', 3);
 
 -- TESTE DE CONSULTA PARA VERIFICAR ALERTAS GERADOS PELO SISTEMA
 SELECT 
