@@ -73,6 +73,23 @@ def create_visao_bp(connection):
                 
         return jsonify({"message": msg, "enabled": enabled}), 200
 
+    @visao_bp.route('/active-learning/status', methods=['GET'])
+    @perfil_required('admin', 'supervisor')
+    def active_learning_status():
+        """
+            Retorna o status atual do Active Learning.
+            Retorno (JSON): {"enabled": true} ou {"enabled": false}
+        """
+        BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+        flag_path = os.path.join(BASE_DIR, 'assets', 'modelo', 'active_learning', 'active_learning.flag')
+        
+        enabled = False
+        if os.path.exists(flag_path):
+            with open(flag_path, 'r') as f:
+                content = f.read().strip()
+                enabled = content == '1'
+        
+        return jsonify({"enabled": enabled}), 200
 
     @visao_bp.route('/video/lote/<int:tamanho_lote>', methods=['POST'])
     @perfil_required('admin')
@@ -100,5 +117,22 @@ def create_visao_bp(connection):
         iniciar_vision_workers(cameras_id=cameras_id, tamanho_lote=tamanho_lote)
 
         return jsonify({"message": f"Tamanho do lote atualizado para {tamanho_lote}."}), 200
+
+    @visao_bp.route('/video/lote', methods=['GET'])
+    @perfil_required('admin')
+    def obter_tamanho_lote():
+        """
+            Retorna o tamanho do lote de câmeras processadas por cada worker.
+            Retorno (JSON): {"tamanho_lote": 2}
+        """
+        # Verifica se há algum worker ativo
+        if not workers:
+            return jsonify({"message": "Nenhum worker ativo no momento."}), 503
+
+        # Obtém o tamanho do lote do primeiro worker ativo
+        first_worker = next(iter(workers.values()))
+        tamanho_lote = first_worker.tamanho_lote
+
+        return jsonify({"tamanho_lote": tamanho_lote}), 200
 
     return visao_bp

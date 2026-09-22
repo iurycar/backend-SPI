@@ -87,3 +87,20 @@ class EstatisticasRepository:
             print(f"Erro ao armazenar estatísticas: {e}")
             self.conn.rollback()
             return False
+
+    def get_quantidade_conformes(self) -> dict:
+        """Obtém quantidade de conformes e não conformes"""
+        with self.conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            consulta = """
+                SELECT 
+                    COALESCE(SUM(total_conformes) FILTER (WHERE total_conformes >= 0), 0) AS total_conformes,
+                    COALESCE(SUM(total_nao_conformes) FILTER (WHERE total_nao_conformes >= 0), 0) AS total_nao_conformes
+                FROM estatisticas;
+            """
+            cursor.execute(consulta)
+            resultado = cursor.fetchone()
+
+            return {
+                "total_conformes": int(resultado['total_conformes']),
+                "total_nao_conformes": int(resultado['total_nao_conformes'])
+            }

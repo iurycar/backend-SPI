@@ -11,5 +11,6 @@ class Zona:
     altura: float = 1.0
     permitido: bool = True
     epis_categoria: list[str] = field(default_factory=list)
+    epis_id: list[int] = field(default_factory=list)
     id_monitorar: list[int] | None = None
     regiao: list[tuple[int, int]] | None = None
