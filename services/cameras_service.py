@@ -68,7 +68,7 @@ class CamerasService:
             print(f"Erro ao criar CameraDTO: {e}")
             return None
         
-        camera = self.cameras_repository.registrar_camera(camera_dto.ip, camera_dto.id_setor, camera_dto.nome)
+        camera = self.cameras_repository.registrar_camera(camera_dto.ip, camera_dto.id_setor, camera_dto.nome, camera_dto.rotacao, camera_dto.espelhar_horizontal, camera_dto.espelhar_vertical)
 
         if camera:
             return {
