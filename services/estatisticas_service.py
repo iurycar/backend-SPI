@@ -24,3 +24,7 @@ class EstatisticasService:
     def armazenar_estatisticas(self, id_setor, total_deteccoes, total_conformes, total_nao_conformes) -> bool:
         """Armazena as estatísticas no banco de dados"""
         return self.estatisticas_repository.armazenar_estatisticas(id_setor, total_deteccoes, total_conformes, total_nao_conformes)
+
+    def obter_quantidade_conformes(self) -> dict:
+        """Obtém quantidade de conformes e não conformes"""
+        return self.estatisticas_repository.get_quantidade_conformes()
