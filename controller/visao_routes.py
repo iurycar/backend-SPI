@@ -2,13 +2,13 @@ from worker.vision_manager import workers, parar_vision_workers, iniciar_vision_
 from core.vision_metrics import empty_detection_snapshot
 from flask import Blueprint, Response, jsonify, request
 from core.auth import login_required, perfil_required
+from services.cameras_service import CamerasService
 import time
 import os
 
-visao_bp = Blueprint('visao', __name__)
-
-
 def create_visao_bp(connection):
+    visao_bp = Blueprint('visao', __name__)
+    cameras_service = CamerasService(connection)
 
     @visao_bp.route('/video', defaults={'camera_id': 1}, methods=['GET'])
     @visao_bp.route('/video/', defaults={'camera_id': 1}, methods=['GET'])
@@ -84,11 +84,20 @@ def create_visao_bp(connection):
         if tamanho_lote < 1:
             return jsonify({"message": "O tamanho do lote deve ser pelo menos 1."}), 400
 
+        cameras = cameras_service.listar_cameras()
+        cameras_id = []
+        
+        if cameras is None or len(cameras) == 0:
+            return jsonify({"message": "Nenhuma câmera encontrada para reiniciar os workers."}), 404
+        
         # Desliga todos os workers
         parar_vision_workers()
+        
+        for camera in cameras:
+            cameras_id.append(camera['id'])
 
         # Reinicia os workers com o novo tamanho de lote
-        iniciar_vision_workers(tamanho_lote=tamanho_lote)
+        iniciar_vision_workers(cameras_id=cameras_id, tamanho_lote=tamanho_lote)
 
         return jsonify({"message": f"Tamanho do lote atualizado para {tamanho_lote}."}), 200
 
