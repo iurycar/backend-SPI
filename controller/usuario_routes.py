@@ -135,9 +135,9 @@ def create_user_bp(connection):
             return jsonify({'message': 'Erro interno do servidor'}), 500
 
 
-    @user_bp.route('/users/<int:usuario_id>', methods=['PUT'])
+    @user_bp.route('/users', methods=['PUT'])
     @perfil_required('admin')
-    def atualizar_usuario(usuario_id):
+    def atualizar_usuario():
         data = request.get_json()
 
         try:
