@@ -84,28 +84,28 @@ class UsuarioRepository:
 
     def listar_usuarios(self) -> list[Usuario]:
         with self.conn.cursor() as cursor:
-            consulta = "SELECT id_usuario, nome, sobrenome, email, perfil, unidade, telefone, ativo FROM usuarios"
+            consulta = "SELECT id_usuario, nome, sobrenome, email, perfil, unidade, telefone, ativo, acesso FROM usuarios"
             cursor.execute(consulta)
             resultados = cursor.fetchall()
 
             usuarios = []
             for resultado in resultados:
-                id_usuario, nome, sobrenome, email, perfil, unidade, telefone, ativo = resultado
-                usuario = Usuario(id_usuario, nome, sobrenome, email, None, perfil, unidade, telefone, ativo)
+                id_usuario, nome, sobrenome, email, perfil, unidade, telefone, ativo, acesso = resultado
+                usuario = Usuario(id_usuario, nome, sobrenome, email, "", perfil, unidade, telefone, ativo, acesso)
                 usuarios.append(usuario)
 
             return usuarios
 
     def listar_usuarios_ativos(self) -> list[Usuario]:
         with self.conn.cursor() as cursor:
-            consulta = "SELECT id_usuario, nome, sobrenome, email, perfil, unidade, telefone, ativo FROM usuarios WHERE ativo = TRUE"
+            consulta = "SELECT id_usuario, nome, sobrenome, email, perfil, unidade, telefone, ativo, acesso FROM usuarios WHERE ativo = TRUE"
             cursor.execute(consulta)
             resultados = cursor.fetchall()
 
             usuarios_ativos = []
             for resultado in resultados:
-                id_usuario, nome, sobrenome, email, perfil, unidade, telefone, ativo = resultado
-                usuario = Usuario(id_usuario, nome, sobrenome, email, None, perfil, unidade, telefone, ativo)
+                id_usuario, nome, sobrenome, email, perfil, unidade, telefone, ativo, acesso = resultado
+                usuario = Usuario(id_usuario, nome, sobrenome, email, "", perfil, unidade, telefone, ativo, acesso)
                 usuarios_ativos.append(usuario)
 
             return usuarios_ativos

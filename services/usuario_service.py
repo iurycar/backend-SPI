@@ -67,8 +67,9 @@ class UsuarioService:
                     'perfil': usuario.get_perfil(),
                     'unidade': usuario.get_unidade(),
                     'telefone': usuario.get_telefone(),
-                    'admin': usuario.is_admin,
-                    'ativo': usuario.is_ativo
+                    'admin': usuario.is_admin(),
+                    'ativo': usuario.is_ativo(),
+                    'acesso': usuario.get_acesso()
                 })
 
         return lista_usuarios
@@ -118,8 +119,9 @@ class UsuarioService:
                     'perfil': usuario.get_perfil(),
                     'unidade': usuario.get_unidade(),
                     'telefone': usuario.get_telefone(),
-                    'admin': usuario.is_admin,
-                    'ativo': usuario.is_ativo
+                    'admin': usuario.is_admin(),
+                    'ativo': usuario.is_ativo(),
+                    'acesso': usuario.get_acesso()
                 })
 
         return lista_usuarios
