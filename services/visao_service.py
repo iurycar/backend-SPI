@@ -15,8 +15,8 @@ import time
 import cv2
 import os
 
-
 from repository.monitoramento_repository import MonitoramentoRepository
+from services.estatisticas_service import EstatisticasService
 from repository.setores_repository import SetoresRepository
 from services.cameras_service import CamerasService
 from services.alertas_service import AlertasService
@@ -71,11 +71,15 @@ class VisaoService:
     def __init__(self, connection):
         self.connection = connection
         self.monitoramento_repository = MonitoramentoRepository(connection)
+        self.estatisticas_service = EstatisticasService(connection)
         self.setores_repository = SetoresRepository(connection)
         self.alertas_service = AlertasService(connection)
         self.cameras_service = CamerasService(connection)
 
         self.redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+
+        self.ultimo_flush_stats = time.time()
+        self.intervalo_flush_stats = 60  # Intervalo de flush em segundos
 
         self.last_results = []
         self.cap = None
@@ -209,6 +213,103 @@ class VisaoService:
                 zona.epis_categoria = [str(epi).strip().lower() for epi in zona.epis_categoria if epi]
         
         return zonas
+
+
+    def _registrar_amostra_estatistica(self, id_setor: int, track_id: int, conforme: bool) -> None:
+        """
+            Registra uma amostragem temporizada de estatística para o setor especificado no Redis.
+        """
+
+        if not id_setor:
+            return
+
+        # Se o track_id for inválido, não registra a amostra
+        if track_id == -1:
+            return 
+
+        # Chave única de lock (cadeado) de cooldown (tempo de recarga) de 5 segundos para evitar duplicidade de amostras
+        temporizador_chave = f"lock:stats:track:{id_setor}:{track_id}"
+
+        # Se a chave já existir, significa que uma amostra recente já foi registrada para este track_id no setor
+        if not self.redis_client.set(temporizador_chave, "1", ex=10, nx=True):
+            return
+
+        pipe = self.redis_client.pipeline()
+        pipe.incr(f"stats:buffer:{id_setor}:total_deteccoes")
+        if conforme:
+            pipe.incr(f"stats:buffer:{id_setor}:conformes")
+        else:
+            pipe.incr(f"stats:buffer:{id_setor}:nao_conformes")
+
+        pipe.sadd(f"stats:setores_ativos", id_setor)
+        pipe.execute()
+
+
+    def _flush_estatisticas_para_banco(self, forcar: bool = False) -> None:
+        """
+            Salva os contadores agregados no Redis na tabela estatisticas no PostgreSQL
+        """
+
+        agora = time.time()
+
+        # Se não for forçar o flush e o intervalo de flush ainda não passou, retorna sem fazer nada
+        if not forcar and (agora - self.ultimo_flush_stats < self.intervalo_flush_stats):
+            return
+
+        self.ultimo_flush_stats = agora
+
+        try:
+            # Coleta todos os setores ativos que tiveram estatísticas registradas recentemente
+            setores = self.redis_client.smembers("stats:setores_ativos")
+
+            if not setores:
+                return
+
+            for setor_id_str in setores:
+                setor_id = int(setor_id_str)
+
+                # Chaves para coleta de estatísticas no Redis
+                chaves_total = f"stats:buffer:{setor_id}:total_deteccoes"
+                chaves_conformes = f"stats:buffer:{setor_id}:conformes"
+                chaves_nao_conformes = f"stats:buffer:{setor_id}:nao_conformes"
+
+                # Coleta os valores dos contadores no Redis
+                pipe = self.redis_client.pipeline()
+                pipe.getset(chaves_total, 0)
+                pipe.getset(chaves_conformes, 0)
+                pipe.getset(chaves_nao_conformes, 0)
+                resultados = pipe.execute()
+
+                total = int(resultados[0] or 0)
+                conformes = int(resultados[1] or 0)
+                nao_conformes = int(resultados[2] or 0)
+
+                # Se houver alguma detecção registrada, armazena as estatísticas no banco de dados
+                if total > 0:
+                    sucesso = self.estatisticas_service.armazenar_estatisticas(
+                        id_setor=setor_id,
+                        total_deteccoes=total,
+                        total_conformes=conformes,
+                        total_nao_conformes=nao_conformes
+                    )
+
+                    if not sucesso:
+                        print(f"❌ Falha ao armazenar estatísticas para o setor {setor_id}: total={total}, conformes={conformes}, não conformes={nao_conformes}")
+
+            # Após processar todos os setores, limpa a lista de setores ativos no Redis
+            self.redis_client.delete("stats:setores_ativos")
+
+        except Exception as e:
+            print(f"❌ Erro ao coletar estatísticas do Redis para flush: {e}")
+
+
+    def _armazenar_conformidade(self, camera_id: int, total_deteccoes: int, conformidades: int, nao_conformidades: int) -> None:
+        """ Armazena as estatísticas de conformidade no banco de dados usando o serviço de estatísticas. """
+
+        # TODO: Adicionar um registro no Redis
+        # Exemplo: self.redis_client.set(f"conformidade:{camera_id}", f"{conformidades}:{nao_conformidades}")
+
+        self.estatisticas_service.armazenar_estatisticas(camera_id, total_deteccoes, conformidades, nao_conformidades)
 
 
     def regiao_para_pixels(self, regiao, img_largura: int, img_altura: int) -> list[tuple[int, int]]:
@@ -464,9 +565,9 @@ class VisaoService:
                         last_results[camera_id] = info
 
 
-                    # >>>>>>>>>>>> PODE REMOVER ISSO, DEPOIS SOMENTE DEBUG <<<<<<<<<<<<
+                    """# >>>>>>>>>>>> PODE REMOVER ISSO, DEPOIS SOMENTE DEBUG <<<<<<<<<<<<
                     self._desenhar_hud_topo(frame_final, dict(class_count))
-                    # =================================================================
+                    # ================================================================="""
                             
                     # Despacha o frame para a fila da respectiva câmera
                     frame_queue = frame_queues.get(camera_id) if frame_queues else None
@@ -483,8 +584,12 @@ class VisaoService:
                                 frame_queue.put(buffer.tobytes(), block=False)
                             except Exception:
                                 pass
+
+                # Flush periódico das estatísticas para o banco de dados
+                self._flush_estatisticas_para_banco()
         finally:
             print("🛑 Encerrando loop de visão em lote...")
+            self._flush_estatisticas_para_banco(forcar=True)
 
 
     def get_last_results(self):
@@ -655,16 +760,31 @@ class VisaoService:
                                 if self._zona_requer_classe(monitoramento.epis_categoria, self._classe_epi_por_label(label_name), monitoramento.permitido):
                                     zonas_do_objeto.append(monitoramento.id)
 
+                                    setor = self.setores_repository.get_setor_por_id_zona(monitoramento.id)
+                                    if setor:
+                                        id_setor = setor.id
+                                    else:
+                                        id_setor = None
+
                                     if label_name.startswith("sem_"):
                                         self._desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')}", self.CORES.get('vermelho', (0, 0, 255)))
                                         self._registrar_alerta_epi_incorreto(monitoramento, f"Sem EPI necessário: {self._classe_epi_por_label(label_name)}", track_id, severidade=2)
+
+                                        if id_setor:
+                                            self._registrar_amostra_estatistica(id_setor, track_id, conforme=False)
                                     else:
                                         if label_name.endswith("_normal"):
                                             self._desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')}", self.CORES.get('amarelo', (0, 255, 255)))
                                             self._registrar_alerta_epi_incorreto(monitoramento, f"Equipamento inadequado: {self._classe_epi_por_label(label_name)}", track_id, severidade=1)
+
+                                            if id_setor:
+                                                self._registrar_amostra_estatistica(id_setor, track_id, conforme=False)
                                         else:
                                             self._desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')}", self.CORES.get('verde', (0, 255, 255)))
-                                                    
+
+                                            if id_setor:
+                                                self._registrar_amostra_estatistica(id_setor, track_id, conforme=True)
+
                                 if label_name == "pessoa" and not self._zona_requer_classe(monitoramento.epis_categoria, "pessoa", monitoramento.permitido):
                                     self._desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize()} ID:{track_id} (Zona Restrita)", self.CORES.get('vermelho', (0, 0, 255)))
                                     self._registrar_alerta_epi_incorreto(monitoramento, "Pessoa em zona restrita", track_id, severidade=3)
@@ -790,10 +910,10 @@ class VisaoService:
             
             if angulo > LIMITE_ANGULO:
                 is_ma_postura = True
-                motivo = f"Inclinacao Lateral ({int(angulo)} graus)"
+                motivo = f"Inclinacao Excessiva do Tronco."
             elif razao_tronco < LIMITE_RAZAO_FRONTAL:
                 is_ma_postura = True
-                motivo = f"Curvado de Frente (Razao: {razao_tronco:.2f})"
+                motivo = f"Inclinacao Excessiva do Tronco."
 
             return is_ma_postura, motivo, (int(pt_ombro[0]), int(pt_ombro[1])), (int(pt_quadril[0]), int(pt_quadril[1]))
 
@@ -831,7 +951,7 @@ class VisaoService:
 
             if diferenca_rotacao > LIMITE_TORCAO:
                 is_ma_postura = True
-                motivo = f"Rotação/Torção Excessiva ({int(diferenca_rotacao)} graus)"
+                motivo = f"Rotação/Torção Excessiva."
 
             return is_ma_postura, motivo, (int(ombro_esq[0]), int(ombro_esq[1])), (int(quadril_esq[0]), int(quadril_esq[1]))
 
@@ -867,7 +987,7 @@ class VisaoService:
 
             if proporcao > LIMITE_QUEDA:
                 is_ma_postura = True
-                motivo = f"Pessoa caída no chão (Prop: {proporcao:.2f})"
+                motivo = f"Pessoa caída no chão."
 
             # Calcula o ponto central do corpo para exibir a mensagem corretamente
             centro_x = int((min_x + max_x) / 2)
@@ -954,17 +1074,19 @@ class VisaoService:
                         )
                         
                         if is_ma_postura:
-                            cor_coluna = self.CORES.get('vermelho', (0, 0, 255))
-                            """cv2.putText(frame, f"ALERTA: {motivo}", 
-                                        (pt_ombro[0] - 60, pt_ombro[1] - 20),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, cor_coluna, 2)"""
-                            
-                            if track_id != -1:
-                                self._registrar_alerta_postura(
-                                    camera_id, track_id, motivo, tipo_deteccao='postura_tronco'
-                                )
-                                
+                            cor_coluna = self.CORES.get('vermelho', (0, 0, 255))    
                         cv2.line(frame, pt_ombro, pt_quadril, cor_coluna, 4, cv2.LINE_AA)
+
+                        if track_id != -1:
+                            self._monitorar_tempo_postura(
+                                camera_id=camera_id,
+                                track_id=track_id, 
+                                tipo_deteccao='postura_tronco',
+                                motivo=motivo if is_ma_postura else "Postura normal",
+                                ativo=is_ma_postura,
+                                tempo_limite_segundos=10,
+                                severidade=1
+                            )                        
 
                         # --- AVALIAÇÃO DA ROTAÇÃO ---
                         is_ma_postura_rotacao, motivo_rotacao, _, _ = self._avaliar_postura(
@@ -973,15 +1095,16 @@ class VisaoService:
                             quadril_esq=quadril_esq, quadril_dir=quadril_dir
                         )
                         
-                        if is_ma_postura_rotacao:
-                            """cv2.putText(frame, f"ALERTA: {motivo_rotacao}", 
-                                        (pt_ombro[0] - 60, pt_ombro[1] - 40),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.CORES.get('vermelho', (0, 0, 255)), 2)"""
-
-                            if track_id != -1:
-                                self._registrar_alerta_postura(
-                                    camera_id, track_id, motivo_rotacao, tipo_deteccao='postura_rotacao'
-                                )
+                        if track_id != -1:
+                            self._monitorar_tempo_postura(
+                                camera_id=camera_id,
+                                track_id=track_id, 
+                                tipo_deteccao='postura_rotacao',
+                                motivo=motivo_rotacao if is_ma_postura_rotacao else "Sem rotacao excessiva",
+                                ativo=is_ma_postura_rotacao,
+                                tempo_limite_segundos=10,
+                                severidade=1
+                            )
 
                         # --- AVALIAÇÃO DE QUEDA ---
                         is_caido, motivo_queda, _, _ = self._avaliar_postura(
@@ -990,64 +1113,96 @@ class VisaoService:
                             quadril_esq=quadril_esq, quadril_dir=quadril_dir
                         )
 
-                        if is_caido:
-                            """cv2.putText(frame, f"ALERTA: {motivo_queda}", 
-                                        (pt_ombro[0] - 60, pt_ombro[1] - 60),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.CORES.get('vermelho', (0, 0, 255)), 2)"""
-                            
-                            if track_id != -1:
-                                self._registrar_alerta_postura(
-                                    camera_id, track_id, motivo_queda, severidade=3, tipo_deteccao='queda'
-                                )
+                        if track_id != -1:
+                            self._monitorar_tempo_postura(
+                                camera_id=camera_id,
+                                track_id=track_id,
+                                tipo_deteccao='queda',
+                                motivo=motivo_queda if is_caido else "Em pé",
+                                ativo=is_caido,
+                                tempo_limite_segundos=3,
+                                severidade=3
+                            )
 
 
-    def _registrar_alerta_postura(self, camera_id: int, track_id: int, motivo: str,
-                                severidade: int = 1, *, tipo_deteccao: str) -> None:
+    def _monitorar_tempo_postura(self,
+                                 camera_id: int,
+                                 track_id: int,
+                                 tipo_deteccao: str,
+                                 motivo: str,
+                                 ativo: bool,
+                                 tempo_limite_segundos: int = 10,
+                                 severidade: int = 1
+                                ) -> None:
         """
-        Registra um alerta de má postura no banco de dados, evitando duplicidade por ID.
+            Garante que o alerta só seja disparado se a postura incorreta persistir por um tempo mínimo (tempo_limite_segundos).
         """
 
         if tipo_deteccao not in TIPOS_POSTURA:
-            raise ValueError('tipo_deteccao inválido para postura.')
+            raise ValueError(f"tipo_deteccao '{tipo_deteccao}' inválido para postura.")
 
-        cache_chave = f"lock:alerta:postura:{camera_id}:{track_id}:{motivo}"
+        chave_inicio = f"postura:inicio:{camera_id}:{track_id}:{tipo_deteccao}"
+        chave_alerta_emitido = f"postura:emitido:{camera_id}:{track_id}:{tipo_deteccao}"
 
-        # Evita alertas duplicados para o mesmo track_id e motivo dentro de um período de 30 segundos
-        acquired = self.redis_client.set(cache_chave, "1", ex=30, nx=True)
+        agora = time.time()
 
-        trace_alert_candidate('postura', camera_id, None, motivo, track_id, acquired)
-
-        if not acquired:
+        # Se a postura não está mais ativa, remove o registro de início e o alerta emitido
+        if not ativo:
+            self.redis_client.delete(chave_inicio)
+            self.redis_client.delete(chave_alerta_emitido)
             return
 
-        try:
-            setor = self.setores_repository.get_setor_por_id_camera(camera_id)
+        # Se a postura está ativa, registra o tempo de início se ainda não existir
+        self.redis_client.set(chave_inicio, str(agora), nx=True, ex=60)
 
-            if not setor:
-                logger.warning('Câmera/setor inexistente ao registrar postura: %s.', camera_id)
-                return
+        # Se a chave de início já existia, atualiza o tempo de expiração para 60 segundos
+        self.redis_client.expire(chave_inicio, 60)
 
-            responsaveis = self.setores_repository.get_responsaveis_por_setor(setor.id)
+        # Se o alerta já foi emitido recentemente, não faz nada
+        if self.redis_client.get(chave_alerta_emitido):
+            return
 
-            sucesso = self.alertas_service.criar_alerta(
-                monitoramento=None,
-                id_usuario=responsaveis[0] if responsaveis else None,
-                evento=motivo,
-                severidade=severidade,
-                destinatarios=responsaveis,
-                tipo_deteccao=tipo_deteccao,
-                id_camera=camera_id
-            )
+        inicio_timestamp_str = self.redis_client.get(chave_inicio)
+        if not inicio_timestamp_str:
+            return
 
-            if sucesso:
-                print(f"⚠️ Má postura detectada - ID: {track_id}")
+        tempo_decorrido = agora - float(inicio_timestamp_str)
 
-        except psycopg2.Error as exc:
-            self.connection.rollback()
-            logger.warning('Falha ao registrar postura da câmera %s (SQLSTATE %s).', camera_id, exc.pgcode)
+        print(f"⏱️ Tempo de postura '{tipo_deteccao}' para câmera {camera_id}, track ID {track_id}: {int(tempo_decorrido)}s (limite: {tempo_limite_segundos}s)")
 
-        except (ValueError, redis.exceptions.RedisError) as exc:
-            logger.warning('Falha ao registrar/notificar postura da câmera %s: %s.', camera_id, exc)
+        if tempo_decorrido >= tempo_limite_segundos:
+            # Marca como emitido com tempo de recarga (ex: 45s) para não disparar alertas repetidos
+            self.redis_client.set(chave_alerta_emitido, "1", ex=45)
+
+            try:
+                setor = self.setores_repository.get_setor_por_id_camera(camera_id)
+
+                if not setor:
+                    logger.warning(f"Setor não encontrado para a câmera {camera_id}. Não é possível registrar alerta de postura.")
+                    return
+
+                responsaveis = self.setores_repository.get_responsaveis_por_setor(setor.id)
+
+                sucesso = self.alertas_service.criar_alerta(
+                    monitoramento=None,
+                    id_usuario=responsaveis[0] if responsaveis else None,
+                    evento=f"Má postura detectada: {motivo}",
+                    severidade=severidade,
+                    destinatarios=responsaveis,
+                    tipo_deteccao=tipo_deteccao,
+                    id_camera=camera_id
+                )
+
+                if sucesso:
+                    print(f"⚠️ Alerta emitido: {tipo_deteccao} contínua ({int(tempo_decorrido)}s) - Track ID: {track_id}")
+
+            except psycopg2.Error as exc:
+                self.connection.rollback()
+                logger.warning("Falha ao registrar postura da câmera %s (SQLSTATE %s).", camera_id, exc.pgcode)
+            except (ValueError, redis.exceptions.RedisError) as exc:
+                logger.warning('Falha ao registrar/notificar postura da câmera %s: %s.', camera_id, exc)
+
+
 
 
     # ==================================================

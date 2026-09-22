@@ -50,6 +50,15 @@ def get_camera_status(camera_id: int) -> str:
 
     return 'Ativo' if worker.is_online(camera_id) else 'Desconectado'
 
+def notificar_atualizacao_camera(camera_id: int):
+    """
+        Notifica o worker da atualização na câmera especificada.
+    """
+    worker = workers.get(camera_id)
+
+    if worker:
+        worker.update_camera(camera_id)
+
 def notificar_atualizacao_zonas(camera_id: int):
     """
     Notifica o worker da câmera especificada para recarregar as zonas de monitoramento.

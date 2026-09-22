@@ -38,6 +38,31 @@ class UsuarioRepository:
             self.conn.rollback()
             return None
 
+    def atualizar_usuario(self, 
+                          usuario_id: int, 
+                          nome: str, 
+                          sobrenome: str,
+                          email: str,
+                          senha: str,
+                          perfil: str,
+                          unidade: str | None = None, 
+                          telefone: str | None = None,
+                          ativo: bool = True,
+                          acesso: bool | None = None                      
+    ) -> Usuario | None:
+        try:
+            with self.conn.cursor() as cursor:
+                consulta = "UPDATE usuarios SET nome = %s, sobrenome = %s, email = %s, senha = %s, perfil = %s, unidade = %s, telefone = %s, ativo = %s, acesso = %s WHERE id_usuario = %s"
+                cursor.execute(consulta, (nome, sobrenome, email, senha, perfil, unidade, telefone, ativo, acesso, usuario_id))
+                self.conn.commit()
+
+                return self.get_usuario_por_email(email)
+            
+        except Exception as e:
+            print(f"Erro ao atualizar usuário: {e}")
+            self.conn.rollback()
+            return None
+
     def atualizar_acesso(self, usuario_id: int, acesso) -> None:
         update = "UPDATE usuarios SET acesso = %s WHERE id_usuario = %s"
 
@@ -56,3 +81,31 @@ class UsuarioRepository:
                 return resultado[0]
 
         return None
+
+    def listar_usuarios(self) -> list[Usuario]:
+        with self.conn.cursor() as cursor:
+            consulta = "SELECT id_usuario, nome, sobrenome, email, perfil, unidade, telefone, ativo FROM usuarios"
+            cursor.execute(consulta)
+            resultados = cursor.fetchall()
+
+            usuarios = []
+            for resultado in resultados:
+                id_usuario, nome, sobrenome, email, perfil, unidade, telefone, ativo = resultado
+                usuario = Usuario(id_usuario, nome, sobrenome, email, None, perfil, unidade, telefone, ativo)
+                usuarios.append(usuario)
+
+            return usuarios
+
+    def listar_usuarios_ativos(self) -> list[Usuario]:
+        with self.conn.cursor() as cursor:
+            consulta = "SELECT id_usuario, nome, sobrenome, email, perfil, unidade, telefone, ativo FROM usuarios WHERE ativo = TRUE"
+            cursor.execute(consulta)
+            resultados = cursor.fetchall()
+
+            usuarios_ativos = []
+            for resultado in resultados:
+                id_usuario, nome, sobrenome, email, perfil, unidade, telefone, ativo = resultado
+                usuario = Usuario(id_usuario, nome, sobrenome, email, None, perfil, unidade, telefone, ativo)
+                usuarios_ativos.append(usuario)
+
+            return usuarios_ativos

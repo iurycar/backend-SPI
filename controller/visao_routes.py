@@ -34,6 +34,7 @@ def create_visao_bp(connection):
 
         return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
+
     @visao_bp.route('/detections/<int:camera_id>', methods=['GET'])
     @login_required
     def detections(camera_id):
@@ -44,12 +45,13 @@ def create_visao_bp(connection):
             return jsonify(dados), 503
         return jsonify(worker.get_detection_snapshot(camera_id)), 200
 
+
     @visao_bp.route('/active-learning/toggle', methods=['POST'])
     @perfil_required('admin', 'supervisor')
     def toggle_active_learning():
         """
-        Ativa ou desativa a captura de Active Learning.
-        Corpo da requisição (JSON): {"enabled": true} ou {"enabled": false}
+            Ativa ou desativa a captura de Active Learning.
+            Corpo da requisição (JSON): {"enabled": true} ou {"enabled": false}
         """
         dados = request.json or {}
         enabled = dados.get('enabled', True)
@@ -70,6 +72,7 @@ def create_visao_bp(connection):
             msg = "Active Learning desativado com sucesso."
                 
         return jsonify({"message": msg, "enabled": enabled}), 200
+
 
     @visao_bp.route('/video/lote/<int:tamanho_lote>', methods=['POST'])
     @perfil_required('admin')

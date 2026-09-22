@@ -1,4 +1,4 @@
-from worker.vision_manager import get_camera_status, notificar_desligamento_camera
+from worker.vision_manager import get_camera_status, notificar_desligamento_camera, notificar_atualizacao_camera
 from core.auth import login_required, perfil_required
 from services.cameras_service import CamerasService
 from services.zonas_service import ZonasService
@@ -53,6 +53,9 @@ def create_cameras_bp(connection):
         camera = cameras_service.registrar_camera(data)
 
         if camera:
+            if camera.get('id'):
+                notificar_atualizacao_camera(camera['id'])  # Notifica o worker da atualização da câmera
+                
             return jsonify(camera), 201
         else:
             return jsonify({'message': 'Falha ao registrar a câmera'}), 400
@@ -65,6 +68,9 @@ def create_cameras_bp(connection):
         camera = cameras_service.atualizar_camera(camera_id, data)
 
         if camera:
+            if camera.get('id'):
+                notificar_atualizacao_camera(camera['id'])  # Notifica o worker da atualização da câmera
+                
             return jsonify(camera), 200
         else:
             return jsonify({'message': 'Falha ao atualizar a câmera'}), 400
