@@ -70,18 +70,26 @@ class CamerasRepository:
 
             return None
 
-    def registrar_camera(self, ip: str, id_setor: int, nome: str | None = None) -> Camera | None:
+    def registrar_camera(self, 
+                         ip: str, 
+                         id_setor: int, 
+                         nome: str | None = None, 
+                         rotacao: int = 0, 
+                         espelhar_horizontal: bool = False, 
+                         espelhar_vertical: bool = False
+    ) -> Camera | None:
+        
         with self.conn.cursor() as cursor:
             try:
                 if nome is not None:
                     cursor.execute(
-                        "INSERT INTO cameras (nome, ip, id_setor) VALUES (%s, %s, %s) RETURNING *",
-                        (nome, ip, id_setor)
+                        "INSERT INTO cameras (nome, ip, id_setor, rotacao, espelhar_horizontal, espelhar_vertical) VALUES (%s, %s, %s, %s, %s, %s) RETURNING *",
+                        (nome, ip, id_setor, rotacao, espelhar_horizontal, espelhar_vertical)
                     )
                 else:
                     cursor.execute(
-                        "INSERT INTO cameras (ip, id_setor) VALUES (%s, %s) RETURNING *",
-                        (ip, id_setor)
+                        "INSERT INTO cameras (ip, id_setor, rotacao, espelhar_horizontal, espelhar_vertical) VALUES (%s, %s, %s, %s, %s) RETURNING *",
+                        (ip, id_setor, rotacao, espelhar_horizontal, espelhar_vertical)
                     )
                 self.conn.commit()
                 camera = cursor.fetchone()
