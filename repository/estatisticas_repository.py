@@ -91,19 +91,16 @@ class EstatisticasRepository:
     def get_quantidade_conformes(self) -> dict:
         """Obtém quantidade de conformes e não conformes"""
         with self.conn.cursor(cursor_factory=RealDictCursor) as cursor:
-            resultado = {}
-
-            consulta = "SELECT SUM(total_conformes) AS total_conformes FROM estatisticas WHERE total_conformes >= 0;"
+            consulta = """
+                SELECT 
+                    COALESCE(SUM(total_conformes) FILTER (WHERE total_conformes >= 0), 0) AS total_conformes,
+                    COALESCE(SUM(total_nao_conformes) FILTER (WHERE total_nao_conformes >= 0), 0) AS total_nao_conformes
+                FROM estatisticas;
+            """
             cursor.execute(consulta)
-            resultado_conformes = cursor.fetchone()
+            resultado = cursor.fetchone()
 
-            consulta = "SELECT SUM(total_nao_conformes) AS total_nao_conformes FROM estatisticas WHERE total_nao_conformes >= 0;"
-            cursor.execute(consulta)
-            resultado_nao_conformes = cursor.fetchone()
-
-            resultado = {
-                'total_conformes': resultado_conformes['total_conformes'] or 0,
-                'total_nao_conformes': resultado_nao_conformes['total_nao_conformes'] or 0
+            return {
+                "total_conformes": int(resultado['total_conformes']),
+                "total_nao_conformes": int(resultado['total_nao_conformes'])
             }
-
-            return dict(resultado)

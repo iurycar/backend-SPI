@@ -19,7 +19,11 @@ class ZonasRepository:
                     COALESCE(
                         ARRAY_AGG(DISTINCT e.categoria) FILTER (WHERE e.categoria IS NOT NULL), 
                         '{}'
-                    ) AS categorias_epis
+                    ) AS categorias_epis,
+                    COALESCE(
+                        ARRAY_AGG(DISTINCT e.id_epi) FILTER (WHERE e.id_epi IS NOT NULL), 
+                        '{}'
+                    ) AS ids_epis
                 FROM zonas z
                 LEFT JOIN monitorar m ON z.id_zona = m.id_zona
                 LEFT JOIN epis e ON m.id_epi = e.id_epi
@@ -44,7 +48,8 @@ class ZonasRepository:
                     largura=float(zona[5]),
                     altura=float(zona[6]),
                     permitido=bool(zona[7]),
-                    epis_categoria=list(zona[8])
+                    epis_categoria=list(zona[8]),
+                    epis_id=list(zona[9])
                 ))
 
             return zonas_lista
@@ -64,7 +69,11 @@ class ZonasRepository:
                     COALESCE(
                         ARRAY_AGG(DISTINCT e.categoria) FILTER (WHERE e.categoria IS NOT NULL), 
                         '{}'
-                    ) AS categorias_epis
+                    ) AS categorias_epis,
+                    COALESCE(
+                        ARRAY_AGG(DISTINCT e.id_epi) FILTER (WHERE e.id_epi IS NOT NULL), 
+                        '{}'
+                    ) AS ids_epis
                 FROM zonas z
                 LEFT JOIN monitorar m ON z.id_zona = m.id_zona
                 LEFT JOIN epis e ON m.id_epi = e.id_epi
@@ -85,6 +94,7 @@ class ZonasRepository:
                     altura=float(zona[6]),
                     permitido=bool(zona[7]),
                     epis_categoria=list(zona[8]),
+                    epis_id=list(zona[9])
                 )
             else:
                 return None
@@ -104,7 +114,11 @@ class ZonasRepository:
                     COALESCE(
                         ARRAY_AGG(DISTINCT e.categoria) FILTER (WHERE e.categoria IS NOT NULL), 
                         '{}'
-                    ) AS categorias_epis
+                    ) AS categorias_epis,
+                    COALESCE(
+                        ARRAY_AGG(DISTINCT e.id_epi) FILTER (WHERE e.id_epi IS NOT NULL), 
+                        '{}'
+                    ) AS ids_epis
                 FROM zonas z
                 LEFT JOIN monitorar m ON z.id_zona = m.id_zona
                 LEFT JOIN epis e ON m.id_epi = e.id_epi
@@ -128,7 +142,8 @@ class ZonasRepository:
                         largura=float(zona[5]),
                         altura=float(zona[6]),
                         permitido=bool(zona[7]),
-                        epis_categoria=list(zona[8])
+                        epis_categoria=list(zona[8]),
+                        epis_id=list(zona[9])
                     ))
 
                 return zonas_lista
