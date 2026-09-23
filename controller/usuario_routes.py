@@ -1,18 +1,20 @@
 from flask import Blueprint, jsonify, request, session
 from services.usuario_service import UsuarioService
-import schemas.usuario_dto as usuario_dto
+from schemas.usuario_dto import LoginDTO, SignupDTO
 from core.errors import ValidationError
+from core.auth import perfil_required
 
 def create_user_bp(connection):
     user_bp = Blueprint('user_bp', __name__)
     usuario_service = UsuarioService(connection)
+
 
     @user_bp.route('/login', methods=['POST'])
     def login():
         data = request.get_json()
 
         try:    
-            login_dto = usuario_dto.LoginDTO.from_dict(data)
+            login_dto = LoginDTO.from_dict(data)
 
             user = usuario_service.login(login_dto.email, login_dto.password)
 
@@ -53,10 +55,12 @@ def create_user_bp(connection):
             print(f"Erro no login: {e}")
             return jsonify({'message': 'Erro interno do servidor'}), 500
 
+
     @user_bp.route('/logout', methods=['POST'])
     def logout():
         session.clear()
         return jsonify({'message': 'Logout successful'}), 200
+
 
     @user_bp.route('/session', methods=['GET'])
     def get_session():
@@ -67,6 +71,12 @@ def create_user_bp(connection):
         """
         if 'user_id' not in session:
             return jsonify({'message': 'Não autenticado'}), 401
+
+        ativo = usuario_service.obter_status_ativo(session.get('user_email'))
+
+        if not ativo:
+            session.clear()
+            return jsonify({'message': 'Usuário desativado'}), 403
 
         return jsonify({
             'authenticated': True,
@@ -83,12 +93,14 @@ def create_user_bp(connection):
             }
         }), 200
 
+
     @user_bp.route('/signup', methods=['POST'])
+    @perfil_required('admin')
     def signup():
         data = request.get_json()
 
         try:
-            signup_dto = usuario_dto.SignupDTO.from_dict(data)
+            signup_dto = SignupDTO.from_dict(data)
             user = usuario_service.signup(
                 signup_dto.email, 
                 signup_dto.password, 
@@ -108,6 +120,69 @@ def create_user_bp(connection):
             return jsonify({'message': str(e)}), 400
         except Exception as e:
             print(f"Erro no signup: {e}")
+            return jsonify({'message': 'Erro interno do servidor'}), 500
+
+
+    @user_bp.route('/users', methods=['GET'])
+    @perfil_required('admin')
+    def listar_usuarios():
+        try:
+            usuarios = usuario_service.listar_usuarios()
+
+            return jsonify(usuarios), 200
+        except Exception as e:
+            print(f"Erro ao listar usuários: {e}")
+            return jsonify({'message': 'Erro interno do servidor'}), 500
+
+
+    @user_bp.route('/users', methods=['PUT'])
+    @perfil_required('admin')
+    def atualizar_usuario():
+        data = request.get_json()
+
+        try:
+            usuario_atualizado = usuario_service.atualizar_usuario(data)
+
+            if usuario_atualizado:
+                return jsonify({'message': 'Usuário atualizado com sucesso'}), 200
+            else:
+                return jsonify({'message': 'Erro ao atualizar usuário'}), 400
+
+        except ValidationError as e:
+            return jsonify({'message': str(e)}), 400
+        except Exception as e:
+            print(f"Erro ao atualizar usuário: {e}")
+            return jsonify({'message': 'Erro interno do servidor'}), 500
+
+
+    @user_bp.route('/users/<int:usuario_id>', methods=['DELETE'])
+    @perfil_required('admin')
+    def deletar_usuario(usuario_id):
+        try:
+            usuario_deletado = usuario_service.deletar_usuario(usuario_id)
+
+            # Apagar a sessão do usuário deletado, caso ele esteja logado
+            if 'user_id' in session and session['user_id'] == usuario_id:
+                session.pop('user_id', default=None)
+
+            if usuario_deletado:
+                return jsonify({'message': 'Usuário deletado com sucesso'}), 200
+            else:
+                return jsonify({'message': 'Erro ao deletar usuário'}), 400
+
+        except Exception as e:
+            print(f"Erro ao deletar usuário: {e}")
+            return jsonify({'message': 'Erro interno do servidor'}), 500
+
+    @user_bp.route('/users/ativos', methods=['GET'])
+    @perfil_required('admin')
+    def listar_usuarios_ativos():
+        try:
+            usuarios = usuario_service.listar_usuarios_ativos()
+
+            return jsonify(usuarios), 200
+        except Exception as e:
+            print(f"Erro ao listar usuários ativos: {e}")
             return jsonify({'message': 'Erro interno do servidor'}), 500
 
     return user_bp

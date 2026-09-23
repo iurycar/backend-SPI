@@ -7,6 +7,21 @@ class ZonasService:
     def __init__(self, connection):
         self.zonas_repository = ZonasRepository(connection)
 
+    def _zona_para_dict(self, zona) -> dict:
+        """ Converte um objeto Zona em um dicionário. """
+        return {
+            'id': zona.id,
+            'nome': zona.nome,
+            'x': zona.x,
+            'y': zona.y,
+            'largura': zona.largura,
+            'altura': zona.altura,
+            'permitido': zona.permitido,
+            'id_camera': zona.id_camera,
+            'epis_categoria': zona.epis_categoria,
+            'epis_id': zona.epis_id
+        }
+
     def listar_zonas(self) -> list[dict]:
         zonas = self.zonas_repository.get_zonas()
 
@@ -16,17 +31,7 @@ class ZonasService:
             return zonas_lista
 
         for zona in zonas:
-            zona_dict = {
-                'id': zona.id,
-                'nome': zona.nome,
-                'x': zona.x,
-                'y': zona.y,
-                'largura': zona.largura,
-                'altura': zona.altura,
-                'permitido': zona.permitido,
-                'id_camera': zona.id_camera
-            }
-
+            zona_dict = self._zona_para_dict(zona)
             zonas_lista.append(zona_dict)
 
         return zonas_lista
@@ -35,16 +40,7 @@ class ZonasService:
         zona = self.zonas_repository.get_zona_por_id(zona_id)
 
         if zona:
-            return {
-                'id': zona.id,
-                'nome': zona.nome,
-                'x': zona.x,
-                'y': zona.y,
-                'largura': zona.largura,
-                'altura': zona.altura,
-                'permitido': zona.permitido,
-                'id_camera': zona.id_camera
-            }
+            return self._zona_para_dict(zona)
 
         return None
 
@@ -67,16 +63,7 @@ class ZonasService:
 
         if zonas:
             for zona in zonas:
-                zona_dict = {
-                    'id': zona.id,
-                    'nome': zona.nome,
-                    'x': zona.x,
-                    'y': zona.y,
-                    'largura': zona.largura,
-                    'altura': zona.altura,
-                    'permitido': zona.permitido,
-                    'id_camera': zona.id_camera
-                }
+                zona_dict = self._zona_para_dict(zona)
                 zonas_lista.append(zona_dict)
 
         # Salva os dados no cache Redis com um tempo de expiração de 1 hora (3600 segundos)
@@ -104,22 +91,14 @@ class ZonasService:
             zona_dto.y,
             zona_dto.largura,
             zona_dto.altura,
-            zona_dto.permitido
+            zona_dto.permitido,
+            ids_epis=zona_dto.ids_epis
         )
 
         if zona:
-            redis_client.delete(f"cache:zonas:camera:{zona.id_camera}")  # Invalida o cache para a câmera afetada
+            redis_client.delete(f"cache:zonas:camera:{zona.id_camera}")
 
-            return {
-                'id': zona.id,
-                'nome': zona.nome,
-                'x': zona.x,
-                'y': zona.y,
-                'largura': zona.largura,
-                'altura': zona.altura,
-                'permitido': zona.permitido,
-                'id_camera': zona.id_camera
-            }
+            return self._zona_para_dict(zona)
 
         return None
 
@@ -140,29 +119,21 @@ class ZonasService:
             zona_dto.y,
             zona_dto.largura,
             zona_dto.altura,
-            zona_dto.permitido
+            zona_dto.permitido,
+            ids_epis=zona_dto.ids_epis
         )
 
         if zona:
             redis_client.delete(f"cache:zonas:camera:{zona.id_camera}")  # Invalida o cache para a câmera afetada
-            return {
-                'id': zona.id,
-                'nome': zona.nome,
-                'x': zona.x,
-                'y': zona.y,
-                'largura': zona.largura,
-                'altura': zona.altura,
-                'permitido': zona.permitido,
-                'id_camera': zona.id_camera
-            }
+            return self._zona_para_dict(zona)
 
         return None
 
     def deletar_zona(self, zona_id: int) -> bool:
+        zona = self.zonas_repository.get_zona_por_id(zona_id)
         sucesso = self.zonas_repository.deletar_zona(zona_id)
         if sucesso:
             # Encontra a zona deletada para invalidar o cache
-            zona = self.zonas_repository.obter_zona_por_id(zona_id)
             if zona:
                 redis_client.delete(f"cache:zonas:camera:{zona.id_camera}")  # Invalida o cache para a câmera afetada
         return sucesso

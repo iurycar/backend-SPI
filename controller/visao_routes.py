@@ -1,18 +1,19 @@
+from worker.vision_manager import workers, parar_vision_workers, iniciar_vision_workers
+from core.vision_metrics import empty_detection_snapshot
 from flask import Blueprint, Response, jsonify, request
-from services.visao_service import VisaoService
-from worker.vision_manager import workers
+from core.auth import login_required, perfil_required
+from services.cameras_service import CamerasService
 import time
 import os
 
-visao_bp = Blueprint('visao', __name__)
-
-
 def create_visao_bp(connection):
-    visao_service = VisaoService(connection)
+    visao_bp = Blueprint('visao', __name__)
+    cameras_service = CamerasService(connection)
 
     @visao_bp.route('/video', defaults={'camera_id': 1}, methods=['GET'])
     @visao_bp.route('/video/', defaults={'camera_id': 1}, methods=['GET'])
     @visao_bp.route('/video/<int:camera_id>', methods=['GET'])
+    @login_required
     def video(camera_id=1):
         worker = workers.get(camera_id)
 
@@ -33,32 +34,24 @@ def create_visao_bp(connection):
 
         return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
+
     @visao_bp.route('/detections/<int:camera_id>', methods=['GET'])
+    @login_required
     def detections(camera_id):
-        if workers:
-            worker = workers.get(camera_id)
+        worker = workers.get(camera_id)
+        if worker is None:
+            dados = empty_detection_snapshot()
+            dados['message'] = f'Worker para a câmera {camera_id} não está em execução.'
+            return jsonify(dados), 503
+        return jsonify(worker.get_detection_snapshot(camera_id)), 200
 
-            if worker is None:
-                return jsonify({"message": f"Worker para a câmera {camera_id} não está em execução."}), 503
-
-            # Busca o dicionário específico daquela câmera no lote
-            cam_data = worker.last_results.get(camera_id, {})
-
-            dados = {
-                "detections": cam_data.get('detections', []),
-                "class_count": cam_data.get('class_count', {}),
-                "connected": cam_data.get('connected', False),
-            }
-
-            return jsonify(dados), 200
-        
-        return jsonify({"detections": [], "zonas": []}), 200
 
     @visao_bp.route('/active-learning/toggle', methods=['POST'])
+    @perfil_required('admin', 'supervisor')
     def toggle_active_learning():
         """
-        Ativa ou desativa a captura de Active Learning.
-        Corpo da requisição (JSON): {"enabled": true} ou {"enabled": false}
+            Ativa ou desativa a captura de Active Learning.
+            Corpo da requisição (JSON): {"enabled": true} ou {"enabled": false}
         """
         dados = request.json or {}
         enabled = dados.get('enabled', True)
@@ -80,18 +73,66 @@ def create_visao_bp(connection):
                 
         return jsonify({"message": msg, "enabled": enabled}), 200
 
+    @visao_bp.route('/active-learning/status', methods=['GET'])
+    @perfil_required('admin', 'supervisor')
+    def active_learning_status():
+        """
+            Retorna o status atual do Active Learning.
+            Retorno (JSON): {"enabled": true} ou {"enabled": false}
+        """
+        BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+        flag_path = os.path.join(BASE_DIR, 'assets', 'modelo', 'active_learning', 'active_learning.flag')
+        
+        enabled = False
+        if os.path.exists(flag_path):
+            with open(flag_path, 'r') as f:
+                content = f.read().strip()
+                enabled = content == '1'
+        
+        return jsonify({"enabled": enabled}), 200
+
     @visao_bp.route('/video/lote/<int:tamanho_lote>', methods=['POST'])
+    @perfil_required('admin')
     def modificar_tamanho_lote(tamanho_lote):
         """
-        Modifica o tamanho do lote de câmeras processadas por cada worker.
-        Corpo da requisição (JSON): {"tamanho_lote": 2}
+            Modifica o tamanho do lote de câmeras processadas por cada worker.
+            Corpo da requisição (JSON): {"tamanho_lote": 2}
         """
         if tamanho_lote < 1:
             return jsonify({"message": "O tamanho do lote deve ser pelo menos 1."}), 400
 
-        # Atualiza o tamanho do lote para todos os workers ativos
-        # TODO: Deve desligar os workers atuais e reiniciar com o novo tamanho de lote
+        cameras = cameras_service.listar_cameras()
+        cameras_id = []
+        
+        if cameras is None or len(cameras) == 0:
+            return jsonify({"message": "Nenhuma câmera encontrada para reiniciar os workers."}), 404
+        
+        # Desliga todos os workers
+        parar_vision_workers()
+        
+        for camera in cameras:
+            cameras_id.append(camera['id'])
+
+        # Reinicia os workers com o novo tamanho de lote
+        iniciar_vision_workers(cameras_id=cameras_id, tamanho_lote=tamanho_lote)
 
         return jsonify({"message": f"Tamanho do lote atualizado para {tamanho_lote}."}), 200
+
+    @visao_bp.route('/video/lote', methods=['GET'])
+    @perfil_required('admin')
+    def obter_tamanho_lote():
+        """
+            Retorna o tamanho do lote de câmeras processadas por cada worker.
+            Retorno (JSON): {"tamanho_lote": 2}
+        """
+        # Verifica se há algum worker ativo
+        if not workers:
+            return jsonify({"message": "Nenhum worker ativo no momento."}), 503
+
+        # Obtém o tamanho do lote do primeiro worker ativo
+        first_worker = next(iter(workers.values()))
+        tamanho_lote = first_worker.tamanho_lote
+
+        return jsonify({"tamanho_lote": tamanho_lote}), 200
 
     return visao_bp

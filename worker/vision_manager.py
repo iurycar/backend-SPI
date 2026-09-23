@@ -2,7 +2,7 @@ from worker.vision_worker import VisionWorker
 
 workers: dict[int, VisionWorker] = {}
 
-def iniciar_vision_workers(cameras_id: list[int], tamanho_lote: int = 5):
+def iniciar_vision_workers(cameras_id: list[int], tamanho_lote: int = 6):
     """
     Inicia os VisionWorkers agrupando as câmeras em lotes.
     """
@@ -41,7 +41,7 @@ def parar_vision_workers():
     workers.clear()
 
 
-def get_camera_status(camera_id: int) -> dict:
+def get_camera_status(camera_id: int) -> str:
     """Retorna o status da câmera especificada."""
     worker = workers.get(camera_id)
 
@@ -49,6 +49,15 @@ def get_camera_status(camera_id: int) -> dict:
         return 'Inativo'
 
     return 'Ativo' if worker.is_online(camera_id) else 'Desconectado'
+
+def notificar_atualizacao_camera(camera_id: int):
+    """
+        Notifica o worker da atualização na câmera especificada.
+    """
+    worker = workers.get(camera_id)
+
+    if worker:
+        worker.update_camera(camera_id)
 
 def notificar_atualizacao_zonas(camera_id: int):
     """

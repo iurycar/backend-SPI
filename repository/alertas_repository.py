@@ -1,130 +1,66 @@
+import logging
+
+import psycopg2
+
+from core.tipo_deteccao import tipos_do_filtro, validar_vinculo_alerta
 from models.alertas import Alerta
 
+logger = logging.getLogger(__name__)
+
+
 class AlertasRepository:
+    _SELECT = """
+        SELECT a.id_alerta, a.resolvido, a.data_hora, a.id_monitorar,
+               a.id_usuario, a.evento, a.severidade, m.id_zona,
+               COALESCE(a.id_camera, z.id_camera), m.id_epi, a.tipo_deteccao
+        FROM alertas a
+        LEFT JOIN monitorar m ON m.id_monitorar = a.id_monitorar
+        LEFT JOIN zonas z ON m.id_zona = z.id_zona
+    """
+
     def __init__(self, connection):
         self.conn = connection
 
-    def get_alertas(self) -> list[Alerta]:
+    @staticmethod
+    def _mapear_alerta(row) -> Alerta:
+        return Alerta(
+            id=row[0], resolvido=row[1],
+            data_hora=row[2].strftime('%Y-%m-%d %H:%M:%S') if row[2] else '',
+            id_monitorar=row[3], id_usuario=row[4], evento=row[5],
+            severidade=row[6], id_zona=row[7], id_camera=row[8],
+            id_epi=row[9], tipo_deteccao=row[10],
+        )
+
+    def _consultar(self, condicao: str | None = None, parametros: tuple = (),
+                   tipo: str | None = None) -> list[Alerta]:
+        # condicao is supplied only by the fixed queries below, never by HTTP input.
+        filtros = [condicao] if condicao else []
+        tipos = tipos_do_filtro(tipo)
+        if tipos is not None:
+            filtros.append('a.tipo_deteccao IN %s')
+            parametros += (tipos,)
+        query = self._SELECT
+        if filtros:
+            query += ' WHERE ' + ' AND '.join(filtros)
         with self.conn.cursor() as cursor:
-            query = "SELECT a.id_alerta, a.resolvido, a.data_hora, a.id_monitorar, a.id_usuario, a.evento, a.severidade, m.id_zona, z.id_camera, m.id_epi FROM alertas a JOIN monitorar m ON m.id_monitorar = a.id_monitorar JOIN zonas z ON m.id_zona = z.id_zona;"
-            cursor.execute(query)
-            alertas = cursor.fetchall()
+            cursor.execute(query, parametros)
+            return [self._mapear_alerta(row) for row in cursor.fetchall()]
 
-            alertas_lista: list[Alerta] = []
+    def get_alertas(self, tipo: str | None = None) -> list[Alerta]:
+        return self._consultar(tipo=tipo)
 
-            if alertas:
-                for alerta in alertas:
-                    alertas_lista.append(Alerta(
-                        id=alerta[0],
-                        resolvido=alerta[1],
-                        data_hora=alerta[2].strftime("%Y-%m-%d %H:%M:%S") if alerta[2] else "",
-                        id_monitorar=alerta[3],
-                        id_usuario=alerta[4],
-                        evento=alerta[5],
-                        severidade=alerta[6],
-                        id_zona=alerta[7],
-                        id_camera=alerta[8],
-                        id_epi=alerta[9]
-                    ))
+    def get_alertas_por_id_camera(self, id_camera: int, tipo: str | None = None) -> list[Alerta]:
+        return self._consultar('COALESCE(a.id_camera, z.id_camera) = %s', (id_camera,), tipo)
 
-            return alertas_lista
-
-    def get_alertas_por_id_camera(self, id_camera: int) -> list[Alerta]:
-        with self.conn.cursor() as cursor:
-            query = "SELECT a.id_alerta, a.resolvido, a.data_hora, a.id_monitorar, a.id_usuario, a.evento, a.severidade, m.id_zona, z.id_camera, m.id_epi FROM alertas a JOIN monitorar m ON m.id_monitorar = a.id_monitorar JOIN zonas z ON m.id_zona = z.id_zona WHERE z.id_camera = %s;"
-            cursor.execute(query, (id_camera,))
-            alertas = cursor.fetchall()
-
-            alertas_lista: list[Alerta] = []
-
-            if alertas:
-                for alerta in alertas:
-                    alertas_lista.append(Alerta(
-                        id=alerta[0],
-                        resolvido=alerta[1],
-                        data_hora=alerta[2].strftime("%Y-%m-%d %H:%M:%S") if alerta[2] else "",
-                        id_monitorar=alerta[3],
-                        id_usuario=alerta[4],
-                        evento=alerta[5],
-                        severidade=alerta[6],
-                        id_zona=alerta[7],
-                        id_camera=alerta[8],
-                        id_epi=alerta[9]
-                    ))
-
-            return alertas_lista
-
-    def get_alertas_por_id_zona(self, id_zona: int) -> list[Alerta]:
-        with self.conn.cursor() as cursor:
-            query = "SELECT a.id_alerta, a.resolvido, a.data_hora, a.id_monitorar, a.id_usuario, a.evento, a.severidade, m.id_zona, z.id_camera, m.id_epi FROM alertas a JOIN monitorar m ON m.id_monitorar = a.id_monitorar JOIN zonas z ON m.id_zona = z.id_zona WHERE m.id_zona = %s;"
-            cursor.execute(query, (id_zona,))
-            alertas = cursor.fetchall()
-
-            alertas_lista: list[Alerta] = []
-
-            if alertas:
-                for alerta in alertas:
-                    alertas_lista.append(Alerta(
-                        id=alerta[0],
-                        resolvido=alerta[1],
-                        data_hora=alerta[2].strftime("%Y-%m-%d %H:%M:%S") if alerta[2] else "",
-                        id_monitorar=alerta[3],
-                        id_usuario=alerta[4],
-                        evento=alerta[5],
-                        severidade=alerta[6],
-                        id_zona=alerta[7],
-                        id_camera=alerta[8],
-                        id_epi=alerta[9]
-                    ))
-
-            return alertas_lista
+    def get_alertas_por_id_zona(self, id_zona: int, tipo: str | None = None) -> list[Alerta]:
+        return self._consultar('m.id_zona = %s', (id_zona,), tipo)
 
     def get_alerta_por_id(self, id_alerta: int) -> Alerta | None:
-        with self.conn.cursor() as cursor:
-            query = "SELECT a.id_alerta, a.resolvido, a.data_hora, a.id_monitorar, a.id_usuario, a.evento, a.severidade, m.id_zona, z.id_camera, m.id_epi FROM alertas a JOIN monitorar m ON m.id_monitorar = a.id_monitorar JOIN zonas z ON m.id_zona = z.id_zona WHERE a.id_alerta = %s;"
-            cursor.execute(query, (id_alerta,))
-            alerta = cursor.fetchone()
+        alertas = self._consultar('a.id_alerta = %s', (id_alerta,))
+        return alertas[0] if alertas else None
 
-            if alerta:
-                return Alerta(
-                    id=alerta[0],
-                    resolvido=alerta[1],
-                    data_hora=alerta[2].strftime("%Y-%m-%d %H:%M:%S") if alerta[2] else "",
-                    id_monitorar=alerta[3],
-                    id_usuario=alerta[4],
-                    evento=alerta[5],
-                    severidade=alerta[6],
-                    id_zona=alerta[7],
-                    id_camera=alerta[8],
-                    id_epi=alerta[9]
-                )
-            else:
-                return None
-            
     def get_alertas_por_id_usuario(self, id_usuario: int) -> list[Alerta]:
-        with self.conn.cursor() as cursor:
-            query = "SELECT a.id_alerta, a.resolvido, a.data_hora, a.id_monitorar, a.id_usuario, a.evento, a.severidade, m.id_zona, z.id_camera, m.id_epi FROM alertas a JOIN monitorar m ON m.id_monitorar = a.id_monitorar JOIN zonas z ON m.id_zona = z.id_zona WHERE a.id_usuario = %s;"
-            cursor.execute(query, (id_usuario,))
-            alertas = cursor.fetchall()
-
-            alertas_lista: list[Alerta] = []
-
-            if alertas:
-                for alerta in alertas:
-                    alertas_lista.append(Alerta(
-                        id=alerta[0],
-                        resolvido=alerta[1],
-                        data_hora=alerta[2].strftime("%Y-%m-%d %H:%M:%S") if alerta[2] else "",
-                        id_monitorar=alerta[3],
-                        id_usuario=alerta[4],
-                        evento=alerta[5],
-                        severidade=alerta[6],
-                        id_zona=alerta[7],
-                        id_camera=alerta[8],
-                        id_epi=alerta[9]
-                    ))
-
-            return alertas_lista
+        return self._consultar('a.id_usuario = %s', (id_usuario,))
 
     def marcar_alerta_resolvido(self, id_alerta: int) -> bool:
         with self.conn.cursor() as cursor:
@@ -134,13 +70,26 @@ class AlertasRepository:
 
             return cursor.rowcount > 0
 
-    def criar_alerta(self, id_monitorar: int, id_usuario: int | None, evento: str, severidade: int = 1) -> bool:
-        with self.conn.cursor() as cursor:
-            query = "INSERT INTO alertas (resolvido, data_hora, id_monitorar, id_usuario, evento, severidade) VALUES (FALSE, NOW(), %s, %s, %s, %s);"
-            cursor.execute(query, (id_monitorar, id_usuario, evento, severidade))
+    def criar_alerta(self, id_monitorar: int | None, id_usuario: int | None,
+                     evento: str, severidade: int = 1, *,
+                     tipo_deteccao: str = 'epi', id_camera: int | None = None) -> bool:
+        validar_vinculo_alerta(tipo_deteccao, id_monitorar, id_camera)
+        try:
+            with self.conn.cursor() as cursor:
+                cursor.execute(
+                    """INSERT INTO alertas
+                       (resolvido, data_hora, id_monitorar, id_usuario, evento,
+                        severidade, tipo_deteccao, id_camera)
+                       VALUES (FALSE, NOW(), %s, %s, %s, %s, %s, %s)""",
+                    (id_monitorar, id_usuario, evento, severidade, tipo_deteccao, id_camera),
+                )
+                sucesso = cursor.rowcount > 0
             self.conn.commit()
-
-            return cursor.rowcount > 0
+            return sucesso
+        except psycopg2.Error as exc:
+            self.conn.rollback()
+            logger.warning('Falha ao salvar alerta (SQLSTATE %s).', exc.pgcode)
+            return False
 
     def deletar_alerta(self, id_alerta: int) -> bool:
         with self.conn.cursor() as cursor:
@@ -157,6 +106,7 @@ class AlertasRepository:
                 FROM alertas a
                 JOIN monitorar m ON m.id_monitorar = a.id_monitorar
                 LEFT JOIN epis e ON e.id_epi = m.id_epi
+                WHERE a.tipo_deteccao = 'epi'
                 GROUP BY COALESCE(e.categoria, 'Sem Categoria')
                 ORDER BY total DESC;
             """
@@ -175,27 +125,31 @@ class AlertasRepository:
             return valores
 
     def get_contagem_por_periodo(self, desde) -> list[dict]:
-        with self.conn.cursor() as cursor:
-            query = """
-                SELECT DATE(a.data_hora) AS dia, COUNT(*) AS total
-                FROM alertas a
-                WHERE a.data_hora >= %s
-                GROUP BY DATE(a.data_hora)
-                ORDER BY dia ASC;
-            """
+        try:
+            with self.conn.cursor() as cursor:
+                query = """
+                    SELECT DATE(a.data_hora) AS dia, COUNT(*) AS total
+                    FROM alertas a
+                    WHERE a.data_hora >= %s
+                    GROUP BY DATE(a.data_hora)
+                    ORDER BY dia ASC;
+                """
 
-            cursor.execute(query, (desde,))
-            resultados = cursor.fetchall()
+                cursor.execute(query, (desde,))
+                resultados = cursor.fetchall()
 
-            valores: list[dict] = []
+                valores: list[dict] = []
 
-            for dia, total in resultados:
-                valores.append({
-                    "dia": dia.strftime("%Y-%m-%d"),
-                    "total": total
-                })
+                for dia, total in resultados:
+                    valores.append({
+                        "dia": dia.strftime("%Y-%m-%d"),
+                        "total": total
+                    })
 
-            return valores
+                return valores
+        except psycopg2.Error:
+            self.conn.rollback()
+            raise
 
     def get_monitoramento_por_id_alerta(self, id_alerta: int) -> dict | None:
         with self.conn.cursor() as cursor:

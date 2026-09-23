@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 @dataclass
 class ZonaDTO:
@@ -9,7 +9,7 @@ class ZonaDTO:
     largura: float = 1.0
     altura: float = 1.0
     permitido: bool = True
-    id_epi: int | None = None
+    ids_epis: list[int] | None = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict):
@@ -23,20 +23,26 @@ class ZonaDTO:
         largura = data.get('largura', 1.0)
         altura = data.get('altura', 1.0)
         permitido = data.get('permitido', True)
-        id_epi = data.get('id_epi', None)
+        ids_epis = data.get('ids_epis', None)
 
         if nome is not None and not isinstance(nome, str):
             raise ValueError("Nome must be a string or None.")
+        
         if not isinstance(id_camera, int):
             raise ValueError("ID da câmera must be an integer.")
+        
         if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
             raise ValueError("Coordinates x and y must be numbers.")
+        
         if not isinstance(largura, (int, float)) or not isinstance(altura, (int, float)):
             raise ValueError("Width and height must be numbers.")
+        
         if not isinstance(permitido, bool):
             raise ValueError("Permitido must be a boolean.")
-        if not isinstance(id_epi, int) and id_epi is not None:
-            raise ValueError("ID do EPI must be an integer or None.")
+        
+        if ids_epis is not None:
+            if not isinstance(ids_epis, list) or not all(isinstance(i, int) for i in ids_epis):
+                raise ValueError("IDs dos EPIs must be a list of integers.")
 
         return cls(
             nome=nome,
@@ -46,5 +52,5 @@ class ZonaDTO:
             largura=float(largura),
             altura=float(altura),
             permitido=permitido,
-            id_epi=id_epi
+            ids_epis=ids_epis
         )

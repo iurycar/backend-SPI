@@ -1,6 +1,6 @@
 
-path_captured: "/home/iury/Documents/Challenge 2026 - SPI/backend-SPI/assets/modelo/active_learning/dataset_captura"
-path_cured: "/home/iury/Documents/Challenge 2026 - SPI/backend-SPI/assets/modelo/active_learning/dataset_tratado"
+path_captured: ""
+path_cured: ""
 
 classes: {
   0: 'Pessoa',
@@ -12,5 +12,8 @@ classes: {
   6: 'Sem_luva',
   7: 'Sem_oculos',
   8: 'Sem_capacete',
-  9: 'Sem_mascara'
+  9: 'Sem_mascara',
+  10: 'Com_colete',
+  11: 'Sem_colete',
+  12: 'Com_chapeu'
 }

@@ -1,8 +1,10 @@
 import multiprocessing as mp
+import traceback
 import time
 
 from services.visao_service import VisaoService
 from connection.conn import Connection
+from core.vision_metrics import detection_snapshot
 
 class VisionWorker:
     def __init__(self, cameras_lote: list[int] = None, camera_id: int = None):
@@ -17,6 +19,7 @@ class VisionWorker:
         self.process = None
         self.stop_event = None
         self.reload_zones_events = {}
+        self.reload_camera_events = {}
         self.frame_queues = {}
         self.last_results = None
 
@@ -38,6 +41,7 @@ class VisionWorker:
             camera_data['class_count'] = {}
             camera_data['connected'] = False
             camera_data['last_frame_time'] = 0
+            camera_data['result'] = {}
             self.last_results[camera_id] = camera_data
 
 
@@ -68,6 +72,26 @@ class VisionWorker:
                     print(f"🔄 Worker de visão para a câmera {cam_id} recebeu sinal para recarregar zonas.")
 
 
+    def update_camera(self, camera_id: int) -> None:
+        """
+            Atualiza o worker para incluir uma nova câmera ou alterar uma existente.
+        """
+        if camera_id not in self.cameras:
+            self.cameras.append(camera_id)
+            print(f"🔄 Worker de visão atualizado para incluir/alterar a câmera {camera_id}.")
+
+        print(f"🔄 Worker de visão para a câmera {camera_id} recebeu sinal para atualizar informações da câmera.")
+
+        self.stop() # Para garantir que o worker seja reiniciado com a nova configuração, paramos o processo atual.
+
+        self.frame_queues.clear()
+        self.reload_zones_events.clear()
+
+        self.start()
+        print(f"✅ Worker de visão reiniciado para a câmera {camera_id} com as novas configurações.")
+        
+
+
     def stop(self) -> None:
         
         if self.stop_event is not None:
@@ -94,6 +118,7 @@ class VisionWorker:
 
         except Exception as exc:
             print(f"❌ Worker de lote falhou: {exc}")
+            traceback.print_exc()
 
     def next_frame(self, camera_id: int = None) -> bytes | None:
         if camera_id is None:
@@ -118,6 +143,11 @@ class VisionWorker:
 
         return response.get('detections', [])
 
+    def get_detection_snapshot(self, camera_id: int) -> dict:
+        cam_info = self.last_results.get(camera_id, {})
+        return detection_snapshot(cam_info.get('result', {}),
+                                  self.is_online(camera_id), time.monotonic())
+
     def is_online(self, camera_id: int = None) -> bool:
         """
             Retorna True se o processo estiver vivo e se recebeu um frame nos últimos 5 segundos.
@@ -135,4 +165,4 @@ class VisionWorker:
         connected = cam_info.get('connected', False)
         last_frame_time = cam_info.get('last_frame_time', 0)
 
-        return connected and (time.time() - last_frame_time) < 5
+        return bool(connected and 0 <= time.time() - last_frame_time < 5)

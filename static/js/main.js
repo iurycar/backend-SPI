@@ -330,7 +330,7 @@ window.addEventListener('mouseup', (e) => {
         const w = maxX - minX;
         const h = maxY - minY;
 
-        const minSize = 3; // Tamanho mínimo da caixa em pixels
+        const minSize = 16; // Tamanho mínimo da caixa em pixels
 
         if (w >= minSize && h >= minSize && state.selectedClassForDrawing) {
             const newBox = {

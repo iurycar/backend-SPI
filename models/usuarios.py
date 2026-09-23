@@ -5,14 +5,14 @@ from datetime import datetime
 class Usuario:
     id: int
     nome: str
-    sobrenome: str | None
+    sobrenome: str
     email: str
     password: str
     perfil: str
     unidade: str | None = None
     telefone: str | None = None
     ativo: bool = True
-    acesso: str | None = None
+    acesso: str | datetime = datetime.now().isoformat()
 
     def get_id(self) -> int | None:
         return self.id
@@ -20,7 +20,7 @@ class Usuario:
     def get_nome(self) -> str:
         return self.nome
 
-    def get_sobrenome(self) -> str | None:
+    def get_sobrenome(self) -> str:
         return self.sobrenome
 
     def get_nome_completo(self) -> str:

@@ -19,7 +19,10 @@ class CamerasRepository:
                         id=camera[0],
                         nome=camera[1],
                         ip=camera[2],
-                        id_setor=camera[3]
+                        rotacao=camera[3],
+                        espelhar_horizontal=camera[4],
+                        espelhar_vertical=camera[5],
+                        id_setor=camera[6]
                     ))
 
                 return cameras_lista
@@ -36,10 +39,10 @@ class CamerasRepository:
                     id=camera[0],
                     nome=camera[1],
                     ip=camera[2],
-                    id_setor=camera[3],
-                    rotacao=camera[4],
-                    espelhar_horizontal=camera[5],
-                    espelhar_vertical=camera[6]
+                    rotacao=camera[3],
+                    espelhar_horizontal=camera[4],
+                    espelhar_vertical=camera[5],
+                    id_setor=camera[6]
                 )
 
             return None
@@ -57,25 +60,36 @@ class CamerasRepository:
                         id=camera[0],
                         nome=camera[1],
                         ip=camera[2],
-                        id_setor=camera[3]
+                        rotacao=camera[3],
+                        espelhar_horizontal=camera[4],
+                        espelhar_vertical=camera[5],
+                        id_setor=camera[6]
                     ))
 
                 return cameras_lista
 
             return None
 
-    def registrar_camera(self, ip: str, id_setor: int, nome: str | None = None) -> Camera | None:
+    def registrar_camera(self, 
+                         ip: str, 
+                         id_setor: int, 
+                         nome: str | None = None, 
+                         rotacao: int = 0, 
+                         espelhar_horizontal: bool = False, 
+                         espelhar_vertical: bool = False
+    ) -> Camera | None:
+        
         with self.conn.cursor() as cursor:
             try:
                 if nome is not None:
                     cursor.execute(
-                        "INSERT INTO cameras (nome, ip, id_setor) VALUES (%s, %s, %s) RETURNING *",
-                        (nome, ip, id_setor)
+                        "INSERT INTO cameras (nome, ip, id_setor, rotacao, espelhar_horizontal, espelhar_vertical) VALUES (%s, %s, %s, %s, %s, %s) RETURNING *",
+                        (nome, ip, id_setor, rotacao, espelhar_horizontal, espelhar_vertical)
                     )
                 else:
                     cursor.execute(
-                        "INSERT INTO cameras (ip, id_setor) VALUES (%s, %s) RETURNING *",
-                        (ip, id_setor)
+                        "INSERT INTO cameras (ip, id_setor, rotacao, espelhar_horizontal, espelhar_vertical) VALUES (%s, %s, %s, %s, %s) RETURNING *",
+                        (ip, id_setor, rotacao, espelhar_horizontal, espelhar_vertical)
                     )
                 self.conn.commit()
                 camera = cursor.fetchone()
@@ -85,7 +99,10 @@ class CamerasRepository:
                         id=camera[0],
                         nome=camera[1],
                         ip=camera[2],
-                        id_setor=camera[3]
+                        rotacao=camera[3],
+                        espelhar_horizontal=camera[4],
+                        espelhar_vertical=camera[5],
+                        id_setor=camera[6]
                     )
 
             except Exception as e:
@@ -115,7 +132,10 @@ class CamerasRepository:
                         id=camera[0],
                         nome=camera[1],
                         ip=camera[2],
-                        id_setor=camera[3]
+                        rotacao=camera[3],
+                        espelhar_horizontal=camera[4],
+                        espelhar_vertical=camera[5],
+                        id_setor=camera[6]
                     )
 
             except Exception as e:

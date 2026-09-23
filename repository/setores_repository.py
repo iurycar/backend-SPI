@@ -21,7 +21,7 @@ class SetoresRepository:
 
                 return setores_lista
                 
-            return None
+            return setores_lista
 
     def get_setor_por_id(self, setor_id: int) -> Setor | None:
         with self.conn.cursor() as cursor:
