@@ -773,9 +773,11 @@ class VisaoService:
                                         if id_setor:
                                             self._registrar_amostra_estatistica(id_setor, track_id, conforme=False)
                                     else:
-                                        if label_name.endswith("_normal"):
+                                        if label_name.endswith("_normal") or label_name.endswith("_chapeu"):
                                             self._desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')}", self.CORES.get('amarelo', (0, 255, 255)))
-                                            self._registrar_alerta_epi_incorreto(monitoramento, f"Equipamento inadequado: {self._classe_epi_por_label(label_name)}", track_id, severidade=1)
+
+                                            if label_name.endswith("_chapeu"):
+                                                self._registrar_alerta_epi_incorreto(monitoramento, f"Equipamento inadequado: {self._classe_epi_por_label(label_name)}", track_id, severidade=1)
 
                                             if id_setor:
                                                 self._registrar_amostra_estatistica(id_setor, track_id, conforme=False)
