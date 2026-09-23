@@ -127,12 +127,12 @@ CREATE TABLE alertas (
     id_alerta       INTEGER      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     resolvido       BOOLEAN      NOT NULL DEFAULT FALSE,
     data_hora       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    id_monitorar    INTEGER      REFERENCES monitorar(id_monitorar) ON DELETE RESTRICT,
+    id_monitorar    INTEGER      REFERENCES monitorar(id_monitorar) ON DELETE CASCADE,
     id_usuario      INTEGER      REFERENCES usuarios(id_usuario)             ON DELETE SET NULL, -- Usuário que atendeu/resolveu
     evento          VARCHAR(40)  NOT NULL DEFAULT 'Sem EPI ou zona proibida',
     severidade      INTEGER      NOT NULL DEFAULT 1,
     tipo_deteccao   VARCHAR(20)  NOT NULL DEFAULT 'epi',
-    id_camera       INTEGER      REFERENCES cameras(id_camera) ON DELETE RESTRICT,
+    id_camera       INTEGER      REFERENCES cameras(id_camera) ON DELETE CASCADE,
     CONSTRAINT chk_alertas_tipo_deteccao CHECK (
         tipo_deteccao IN ('epi', 'postura_tronco', 'postura_rotacao', 'queda', 'legado')
     ),

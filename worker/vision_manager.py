@@ -1,6 +1,7 @@
 from worker.vision_worker import VisionWorker
 
 workers: dict[int, VisionWorker] = {}
+MAX_CAMERAS_POR_WORKER = 6  # Limite de câmeras por worker para evitar sobrecarga
 
 def iniciar_vision_workers(cameras_id: list[int], tamanho_lote: int = 6):
     """
@@ -52,12 +53,60 @@ def get_camera_status(camera_id: int) -> str:
 
 def notificar_atualizacao_camera(camera_id: int):
     """
-        Notifica o worker da atualização na câmera especificada.
+    Adiciona ou atualiza a câmera no worker correspondente.
+    Se a câmera já estiver em um worker, apenas reinicia aquele worker.
+    Se for nova, tenta encaixar em um worker com vaga (< MAX_CAMERAS_POR_WORKER).
     """
     worker = workers.get(camera_id)
 
     if worker:
+        # Câmera já pertencia a um worker, apenas reinicia ele
         worker.update_camera(camera_id)
+    else:
+        # Câmera nova: procura um worker existente com espaço vago
+        worker_com_vaga = None
+        for w in set(workers.values()):
+            if len(w.cameras) < MAX_CAMERAS_POR_WORKER:
+                worker_com_vaga = w
+                break
+
+        if worker_com_vaga:
+            print(f"🔄 Encaixando câmera {camera_id} no worker existente com câmeras {worker_com_vaga.cameras}...")
+            workers[camera_id] = worker_com_vaga
+            worker_com_vaga.update_camera(camera_id)
+        else:
+            print(f"🎥 Nenhum worker com vaga encontrado. Criando novo lote para câmera {camera_id}...")
+            iniciar_vision_workers([camera_id], tamanho_lote=MAX_CAMERAS_POR_WORKER)
+
+def notificar_desligamento_camera(camera_id: int):
+    """
+    Para a captura e libera os recursos físicos/RTSP da câmera deletada.
+    """
+    worker = workers.get(camera_id)
+
+    if not worker:
+        return
+
+    # Remove a referência do dicionário global
+    del workers[camera_id]
+
+    # Remove da lista de câmeras do worker
+    if camera_id in worker.cameras:
+        worker.cameras.remove(camera_id)
+
+    # Se não sobraram mais câmeras nesse worker, encerra o processo de vez
+    if len(worker.cameras) == 0:
+        worker.stop()
+        print(f"🛑 Worker encerrado completamente pois não restam câmeras.")
+    else:
+        # Se ainda há outras câmeras no worker, reinicia o processo para liberar o descritor da excluída
+        print(f"🔄 Reiniciando worker para as câmeras restantes: {worker.cameras}")
+        worker.stop()
+        worker.frame_queues.clear()
+        worker.reload_zones_events.clear()
+        worker.start()
+
+    print(f"🛑 Câmera {camera_id} desligada e recursos liberados com sucesso.")
 
 def notificar_atualizacao_zonas(camera_id: int):
     """
@@ -67,16 +116,3 @@ def notificar_atualizacao_zonas(camera_id: int):
 
     if worker:
         worker.reload_zones(camera_id)
-
-def notificar_desligamento_camera(camera_id: int):
-    """
-    Notifica o worker da câmera especificada para desligar.
-    """
-    worker = workers.get(camera_id)
-
-    if worker:
-        if len(worker.cameras) <= 1:
-            worker.stop()
-
-        del workers[camera_id]
-        print(f"🛑 Worker para a câmera {camera_id} foi desligado.")
