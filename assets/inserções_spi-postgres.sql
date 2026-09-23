@@ -26,9 +26,9 @@ INSERT INTO responsabilidade (id_usuario, id_setor) VALUES
 INSERT INTO cameras (nome, ip, id_setor, rotacao, espelhar_horizontal, espelhar_vertical) VALUES
 ('Fresa 1', 'rtsp://admin:SIDI2023@10.14.22.97:554/cam/realmonitor?channel=1&subtype=0', 1, 90, FALSE, FALSE),
 ('Fresa 2', 'rtsp://admin:SIDI2023@10.14.22.98:554/cam/realmonitor?channel=1&subtype=0', 1, 90, FALSE, FALSE),
-('Tenda', 'rtsp://admin:Metaindustr!@@10.14.22.99:554/cam/realmonitor?channel=1&subtype=0', 2, 0, FALSE, FALSE),
-('Sala 4', 'rtsp://admin:Metaindustr!@@10.14.22.94:554/cam/realmonitor?channel=1&subtype=0', 3, 0, FALSE, FALSE),
-('SICK Visionary-B Two', 'rtsp://admin:Metaindustr!@@10.14.22.95:554/cam/realmonitor?channel=1&subtype=0', 4, 0, FALSE, FALSE),
+('Tenda', 'rtsp://admin:Metaindustr%21%40@10.14.22.99:554/cam/realmonitor?channel=1&subtype=0', 2, 0, FALSE, FALSE),
+('Sala 4', 'rtsp://admin:Metaindustr%21%40@10.14.22.94:554/cam/realmonitor?channel=1&subtype=0', 3, 0, FALSE, FALSE),
+('SICK Visionary-B Two', 'rtsp://admin:Metaindustr%21%40@10.14.22.95:554/cam/realmonitor?channel=1&subtype=0', 4, 0, FALSE, FALSE),
 ('Webcam 1', 'local-webcam:0', 4, 0, FALSE, FALSE); -- Câmera de teste local (para desenvolvimento)
 
 
