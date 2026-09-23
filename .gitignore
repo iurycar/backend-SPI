@@ -52,3 +52,4 @@ yolov8n.pt
 yolov8m-pose.pt
 yolov8s-pose.pt
 assets/modelo/treinamento/runs/
+padronizador.py
