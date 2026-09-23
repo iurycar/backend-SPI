@@ -1285,7 +1285,6 @@ class VisaoService:
         
         # Cantos estilizados
         self._desenhar_cantos(frame, x1, y1, x2, y2, color, espessura=2, comprimento=14)
-        self._desenhar_cantos(frame, x1, y1, x2, y2, color, espessura=2, comprimento=14)
 
         # Configuração da tipografia
         fonte = cv2.FONT_HERSHEY_DUPLEX
