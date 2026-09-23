@@ -233,37 +233,63 @@ class ZonasRepository:
 
         with self.conn.cursor() as cursor:
             try:
+                # 1. Atualiza os dados básicos da zona
                 cursor.execute(
-                    "UPDATE zonas SET nome = %s, x = %s, y = %s, largura = %s, altura = %s, id_camera = %s, permitido = %s WHERE id_zona = %s",
+                    """
+                    UPDATE zonas 
+                    SET nome = %s, x = %s, y = %s, largura = %s, altura = %s, id_camera = %s, permitido = %s 
+                    WHERE id_zona = %s
+                    """,
                     (nome, x, y, largura, altura, id_camera, permitido, zona_id)
                 )
 
                 if ids_epis is not None:
-                    cursor.execute("DELETE FROM monitorar WHERE id_zona = %s", (zona_id,))
-                    if ids_epis:
-                        epis_unicos = list(set(ids_epis))
-                    else:
-                        epis_unicos = []
+                    # 2. Obtém as regras atuais cadastradas em monitorar para esta zona
+                    cursor.execute(
+                        "SELECT id_epi, id_monitorar FROM monitorar WHERE id_zona = %s", 
+                        (zona_id,)
+                    )
+                    linhas = cursor.fetchall()
+                    
+                    # Mapeia {id_epi: id_monitorar} (trata NULL como None para zonas restritas sem EPI)
+                    mapa_atual = {linha[0]: linha[1] for linha in linhas}
 
-                    if epis_unicos:
-                        dados_monitorar: list[tuple[int, int | None]] = []
-                        for id_epi in epis_unicos:
-                            dados_monitorar.append((zona_id, id_epi))
+                    # Define o conjunto de EPIs desejado
+                    novos_epis = set(ids_epis) if ids_epis else {None}
+                    epis_existentes = set(mapa_atual.keys())
 
-                        # Realiza a inserção em lote na tabela monitorar
+                    # O que precisa entrar e o que precisa sair
+                    epis_para_inserir = novos_epis - epis_existentes
+                    epis_para_remover = epis_existentes - novos_epis
+
+                    # Insere os novos vínculos
+                    if epis_para_inserir:
+                        dados_novos = [(zona_id, id_epi) for id_epi in epis_para_inserir]
                         cursor.executemany(
                             "INSERT INTO monitorar (id_zona, id_epi) VALUES (%s, %s)",
-                            dados_monitorar
+                            dados_novos
                         )
-                    else:
-                        # Se não foi passado nenhum EPI (ex: zona proibida ou restrita sem EPI)
+
+                    # Remove os vínculos descartados (apenas se não houver alerta vinculado)
+                    if epis_para_remover:
+                        ids_monitorar_remover = [mapa_atual[epi] for epi in epis_para_remover]
+                        
+                        # Verifica quais id_monitorar possuem alertas vinculados
                         cursor.execute(
-                            "INSERT INTO monitorar (id_zona, id_epi) VALUES (%s, NULL)",
-                            (zona_id,)
+                            "SELECT DISTINCT id_monitorar FROM alertas WHERE id_monitorar = ANY(%s)",
+                            (ids_monitorar_remover,)
                         )
+                        em_uso = {row[0] for row in cursor.fetchall()}
+
+                        # Deleta com segurança apenas os que NÃO têm alertas
+                        deletaveis = [m_id for m_id in ids_monitorar_remover if m_id not in em_uso]
+                        if deletaveis:
+                            cursor.execute(
+                                "DELETE FROM monitorar WHERE id_monitorar = ANY(%s)",
+                                (deletaveis,)
+                            )
 
                 self.conn.commit()
-
                 return self.get_zona_por_id(zona_id)
             
             except Exception as e:

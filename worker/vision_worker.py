@@ -72,33 +72,45 @@ class VisionWorker:
                     print(f"🔄 Worker de visão para a câmera {cam_id} recebeu sinal para recarregar zonas.")
 
 
-    def update_camera(self, camera_id: int) -> None:
-        """
-            Atualiza o worker para incluir uma nova câmera ou alterar uma existente.
-        """
-        if camera_id not in self.cameras:
-            self.cameras.append(camera_id)
-            print(f"🔄 Worker de visão atualizado para incluir/alterar a câmera {camera_id}.")
-
-        print(f"🔄 Worker de visão para a câmera {camera_id} recebeu sinal para atualizar informações da câmera.")
-
-        self.stop() # Para garantir que o worker seja reiniciado com a nova configuração, paramos o processo atual.
-
-        self.frame_queues.clear()
-        self.reload_zones_events.clear()
-
-        self.start()
-        print(f"✅ Worker de visão reiniciado para a câmera {camera_id} com as novas configurações.")
-        
-
-
     def stop(self) -> None:
-        
         if self.stop_event is not None:
             self.stop_event.set()
 
-        if self.process is not None and self.process.is_alive():
-            self.process.join(timeout=3)
+        if self.process is not None:
+            if self.process.is_alive():
+                self.process.join(timeout=3)
+                
+                # Se após 3 segundos o processo ainda não encerrou (travado no OpenCV/RTSP), força a finalização
+                if self.process.is_alive():
+                    print("⚠️ Processo do worker não encerrou a tempo. Forçando terminação (terminate)...")
+                    self.process.terminate()
+                    self.process.join(timeout=1)
+                    
+                    if self.process.is_alive():
+                        self.process.kill()
+                        self.process.join()
+
+            self.process = None
+
+
+    def update_camera(self, camera_id: int) -> None:
+        """
+        Atualiza o worker para incluir uma nova câmera ou alterar uma existente.
+        """
+        if camera_id not in self.cameras:
+            self.cameras.append(camera_id)
+            print(f"🔄 Worker de visão atualizado para incluir câmera {camera_id}. Câmeras atuais: {self.cameras}")
+
+        # Encerra completamente o processo anterior antes de limpar estruturas
+        self.stop()
+
+        # Limpa e reinicializa eventos e filas
+        self.frame_queues.clear()
+        self.reload_zones_events.clear()
+
+        # Reinicia o processo com a lista de câmeras atualizada
+        self.start()
+        print(f"✅ Worker de visão reiniciado para a câmera {camera_id} com as novas configurações.")
 
     @staticmethod
     def _run_batch(cameras, frame_queues, last_results, stop_event, reload_zones_events) -> None:
