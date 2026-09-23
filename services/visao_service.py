@@ -779,8 +779,11 @@ class VisaoService:
                                             if label_name.endswith("_chapeu"):
                                                 self._registrar_alerta_epi_incorreto(monitoramento, f"Equipamento inadequado: {self._classe_epi_por_label(label_name)}", track_id, severidade=1)
 
-                                            if id_setor:
-                                                self._registrar_amostra_estatistica(id_setor, track_id, conforme=False)
+                                                if id_setor:
+                                                    self._registrar_amostra_estatistica(id_setor, track_id, conforme=False)
+                                            elif label_name.endswith("_normal"):
+                                                if id_setor:
+                                                    self._registrar_amostra_estatistica(id_setor, track_id, conforme=True)
                                         else:
                                             self._desenhar_caixa_delimitadora(frame, xyxy, f"{label_name.capitalize().replace('_', ' ')}", self.CORES.get('verde', (0, 255, 255)))
 
