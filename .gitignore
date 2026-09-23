@@ -35,6 +35,7 @@ assets/modelo/active_learning/dataset_tratado/train/images
 assets/modelo/active_learning/dataset_tratado/train/labels
 assets/modelo/active_learning/dataset_tratado/val/images
 assets/modelo/active_learning/dataset_tratado/val/labels
+assets/modelo/active_learning/dataset_treinado
 PLANO_INTEGRACAO_BACKEND.md
 RELATORIO_IMPLEMENTACAO_BACKEND.md
 assets/alarme-esp32/
