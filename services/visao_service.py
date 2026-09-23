@@ -133,10 +133,12 @@ class VisaoService:
 
                 os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = (
                     "rtsp_transport;tcp|"
-                    "stimeout;3000000|"
-                    "rw_timeout;3000000|"
-                    "max_delay;500000|"
-                    "buffer_size;2048000"
+                    "stimeout;1000000|"
+                    "rw_timeout;1000000|"
+                    "fflags;nobuffer|" 
+                    "flush_packets;1|"
+                    "max_delay;100000|"
+                    "buffer_size;1024000"
                 )
 
                 cap = cv2.VideoCapture(ip, cv2.CAP_FFMPEG)
@@ -446,7 +448,7 @@ class VisaoService:
                 # Tenta abrir/reconectar
                 if cap is None or not cap.isOpened():
                     if tempo_atual >= proxima_tentativa:
-                        proxima_tentativa = tempo_atual + 5
+                        proxima_tentativa = tempo_atual + 1.0
                         cap = self.open_camera(cam_id)
 
                         if cap is None or not cap.isOpened():
@@ -459,14 +461,16 @@ class VisaoService:
                             if cap is not None:
                                 cap.release()
                                 cap = None
-                            time.sleep(0.5)
+                            time.sleep(0.1)
                             continue
                     else:
-                        time.sleep(0.2)
+                        time.sleep(0.05)
                         continue
 
+                # Esvazia frames acumulados no buffer interno do driver
+                cap.grab()
                 # Leitura do frame protegida
-                sucesso, frame = cap.read()
+                sucesso, frame = cap.retrieve()
                 if not sucesso or frame is None or frame.size == 0:
                     cameras_ativas_status[cam_id] = False
                     if last_results is not None and cam_id in last_results:
@@ -476,7 +480,7 @@ class VisaoService:
 
                     cap.release()
                     cap = None
-                    proxima_tentativa = tempo_atual + 4
+                    proxima_tentativa = tempo_atual + 1.0
                     continue
 
                 frame = self.aplicar_transformacoes_frame(frame, cam_id)
@@ -492,7 +496,7 @@ class VisaoService:
                     info['last_frame_time'] = time.time()
                     last_results[cam_id] = info
 
-                time.sleep(0.01)
+                time.sleep(0.005)
 
             if cap is not None:
                 cap.release()
@@ -533,7 +537,7 @@ class VisaoService:
                                 pacotes_lote.append((camera_id, frame.copy(), captured_at, sequence))
 
                 if not pacotes_lote:
-                    time.sleep(0.01)
+                    time.sleep(0.005)
                     continue
 
                 for pacote in pacotes_lote:
@@ -970,6 +974,10 @@ class VisaoService:
             ombro_dir: tuple[float, float] = kargs.get('ombro_dir')
             quadril_esq: tuple[float, float] = kargs.get('quadril_esq')
             quadril_dir: tuple[float, float] = kargs.get('quadril_dir')
+            joelho_esq: tuple[float, float] = kargs.get('joelho_esq')
+            joelho_dir: tuple[float, float] = kargs.get('joelho_dir')
+            tornozelo_esq: tuple[float, float] = kargs.get('tornozelo_esq')
+            tornozelo_dir: tuple[float, float] = kargs.get('tornozelo_dir')
 
             if ombro_esq is None or ombro_dir is None or quadril_esq is None or quadril_dir is None:
                 return is_ma_postura, motivo, (0, 0), (0, 0)
@@ -981,25 +989,40 @@ class VisaoService:
             max_y = max(ombro_esq[1], ombro_dir[1], quadril_esq[1], quadril_dir[1])
 
             largura = max_x - min_x
-            altura = max_y - min_y
+            altura = max(max_y - min_y, 1) # Evita divisão por zero
+            proporcao = largura / altura  # Proporção horizontal do tronco
 
-            # Evita divisão por zero
-            altura = max(altura, 1)
+            # Ponto médio da coluna: ombros vs quadris
+            pt_ombro = ((ombro_esq[0] + ombro_dir[0]) / 2, (ombro_esq[1] + ombro_dir[1]) / 2)
+            pt_quadril = ((quadril_esq[0] + quadril_dir[0]) / 2, (quadril_esq[1] + quadril_dir[1]) / 2)
 
-            # Calcula a proporção geométrica da pessoa (Largura / Altura)
-            proporcao = largura / altura
+            # Vetor da coluna em relação à horizontal: se estiver deitado no chão, o ângulo com a horizontal é baixo (< 35°)
+            dx_coluna = abs(pt_ombro[0] - pt_quadril[0])
+            dy_coluna = abs(pt_quadril[1] - pt_ombro[1])
+            angulo_horizontal_coluna = math.degrees(math.atan2(dy_coluna, max(dx_coluna, 1)))
 
-            # Se a largura for 20% maior que a altura do tronco, é muito provável que esteja no chão
-            LIMITE_QUEDA = 1.2 
+            # 2. Análise de Membros Inferiores (Filtro de Agachamento)
+            # Ao agachar, o tronco comprime mas permanece estritamente ACIMA dos joelhos/tornozelos
+            is_agachado = False
+            pontos_pernas_validos = []
+            for p in [joelho_esq, joelho_dir, tornozelo_esq, tornozelo_dir]:
+                if p is not None and p[0] > 0 and p[1] > 0:
+                    pontos_pernas_validos.append(p[1])  # Y aponta para baixo
 
-            if proporcao > LIMITE_QUEDA:
+            if len(pontos_pernas_validos) >= 2:
+                media_y_pernas = sum(pontos_pernas_validos) / len(pontos_pernas_validos)
+                # Se os ombros e quadris estão consideravelmente acima das pernas e a coluna não está horizontal, é agachamento
+                if pt_quadril[1] < media_y_pernas and angulo_horizontal_coluna > 40.0:
+                    is_agachado = True
+
+            # Disparo: Proporção horizontal alargada + Coluna alinhada ao plano do solo + Não é agachamento
+            LIMITE_QUEDA = 1.2
+            if proporcao > LIMITE_QUEDA and angulo_horizontal_coluna <= 35.0 and not is_agachado:
                 is_ma_postura = True
-                motivo = f"Pessoa caída no chão."
+                motivo = "Pessoa caída no chão."
 
-            # Calcula o ponto central do corpo para exibir a mensagem corretamente
             centro_x = int((min_x + max_x) / 2)
             centro_y = int((min_y + max_y) / 2)
-
             return is_ma_postura, motivo, (centro_x, centro_y), (centro_x, centro_y)
 
 
@@ -1054,14 +1077,14 @@ class VisaoService:
                         if (x1 > 0 and y1 > 0) and (x2 > 0 and y2 > 0):
                             cv2.line(frame, (x1, y1), (x2, y2), (255, 180, 0), 2, cv2.LINE_AA)
 
-                    # Pega os pontos dos ombros e quadris
                     ombro_esq, ombro_dir = individual[5], individual[6]
                     quadril_esq, quadril_dir = individual[11], individual[12]
+                    joelho_esq, joelho_dir = individual[13], individual[14]
+                    tornozelo_esq, tornozelo_dir = individual[15], individual[16]
 
                     cor_coluna = self.CORES.get('ciano', (0, 255, 255))
                     pontos_validos = True
 
-                    # 1. Primeiro apenas verifica se TODOS os pontos são válidos
                     for p in [ombro_esq, ombro_dir, quadril_esq, quadril_dir]:
                         if p[0] <= 0 or p[1] <= 0:
                             pontos_validos = False
@@ -1113,13 +1136,14 @@ class VisaoService:
                                 severidade=1
                             )
 
-                        # --- AVALIAÇÃO DE QUEDA ---
+                        # --- QUEDA (Com validação articular completa) ---
                         is_caido, motivo_queda, _, _ = self._avaliar_postura(
                             "queda", 
                             ombro_esq=ombro_esq, ombro_dir=ombro_dir, 
-                            quadril_esq=quadril_esq, quadril_dir=quadril_dir
+                            quadril_esq=quadril_esq, quadril_dir=quadril_dir,
+                            joelho_esq=joelho_esq, joelho_dir=joelho_dir,
+                            tornozelo_esq=tornozelo_esq, tornozelo_dir=tornozelo_dir
                         )
-
                         if track_id != -1:
                             self._monitorar_tempo_postura(
                                 camera_id=camera_id,
@@ -1260,7 +1284,6 @@ class VisaoService:
         cv2.rectangle(frame, (x1, y1), (x2, y2), color, 1, cv2.LINE_AA)
         
         # Cantos estilizados
-        self._desenhar_cantos(frame, x1, y1, x2, y2, color, espessura=2, comprimento=14)
         self._desenhar_cantos(frame, x1, y1, x2, y2, color, espessura=2, comprimento=14)
 
         # Configuração da tipografia
