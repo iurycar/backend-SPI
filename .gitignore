@@ -53,3 +53,5 @@ yolov8m-pose.pt
 yolov8s-pose.pt
 assets/modelo/treinamento/runs/
 padronizador.py
+best_openvino_model
+yolov8m-pose_openvino_model
