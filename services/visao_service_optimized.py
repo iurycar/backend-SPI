@@ -1,28 +1,3 @@
-"""
-VisaoServiceOptimized — substitui o loop de visão sem mexer no resto do sistema.
-
-Herda de VisaoService (regras de zona, alertas, estatísticas, _avaliar_postura, HUD...) e troca só o que
-estava custando FPS/latência:
-
-  1. Captura, inferência e publicação do vídeo rodam desacopladas (ver worker/vision_pipeline.py).
-  2. Um tracker ByteTrack POR CÂMERA (antes `model.track(persist=True)` compartilhava o estado entre câmeras
-     e os IDs se misturavam).
-  3. Pose roda em cadência própria (5 FPS com gente na cena, ~1 FPS sem ninguém) — os alertas de postura
-     exigem 3 a 10 s de persistência, então 30 FPS de pose era desperdício.
-  4. Nada de banco/Redis/rede no caminho quente: setor por zona em cache, cooldowns locais, e efeitos
-     colaterais (alerta, estatística, ESP32) vão para uma thread própria.
-  5. Desenho dos boxes/esqueleto passa para o publicador (a inferência só devolve "o que desenhar").
-  6. Backend de inferência configurável (PyTorch / OpenVINO / ONNX / NCNN) + warm-up + profiling por etapa.
-
-Variáveis de ambiente (todas opcionais):
-  VISION_BACKEND=openvino|onnx|ncnn|pt   (padrão openvino; cai para pt se o modelo exportado não existir)
-  DET_IMGSZ=640 | 384,640                (int = quadrado; "alt,larg" = retangular, tem que bater com o export)
-  POSE_IMGSZ=480
-  STREAM_FPS=30  STREAM_WIDTH=960  JPEG_QUALITY=75  CAPTURE_MAX_FPS=0
-  POSE_ACTIVE_INTERVAL=0.2  POSE_IDLE_INTERVAL=1.0  POSE_IDLE_AFTER=3.0
-  POSE_MAX_DUTY=0.35        (a pose nunca usa mais que ~35% do tempo do worker, dividido entre as câmeras)
-  TRACK_FPS=15   VISION_TORCH_THREADS=<n>   VISION_CV_THREADS=2   VISION_PROFILE=0|1
-"""
 import logging
 import os
 import threading
@@ -38,13 +13,27 @@ import psycopg2
 from core.stage_profiler import StageProfiler
 from core.tipo_deteccao import TIPOS_POSTURA
 from core.vision_metrics import FrameMetrics
-from services.visao_service import VisaoService, MODEL_PATH, MODEL_PATH_POSE
+from services.visao_service import MODEL_PATH, MODEL_PATH_POSE, VisaoService
 from worker.vision_pipeline import (
-    CameraReader, DisplayPublisher, LatestSlot, TTLCache, TTLGate, apply_transform,
+    CacheComTTL,
+    CameraReader,
+    UltimoFrameContainer,
+    DisplayPublisher,
+    LimitadorTempoChave,
+    aplicar_transformacoes,
 )
-
 logger = logging.getLogger(__name__)
 
+"""
+VisaoServiceOptimized — substitui o loop de execução contínua com foco em alto desempenho.
+
+Principais otimizações em relação ao serviço básico:
+  1. Pipeline desacoplado: Captura, inferência e publicação rodam em threads separadas.
+  2. Rastreamento isolado: Cria uma instância independente de ByteTrack para cada câmera.
+  3. Estimativa de postura em cadência adaptativa: Evita executar o modelo pesado de pose em todos os frames.
+  4. Processamento de efeitos colaterais em segundo plano (alertas no banco, ESP32 e estatísticas).
+  5. Camada de cache para setores e zonas em memória RAM.
+"""
 
 def _imgsz_env(name: str, default: str):
     parts = [int(p) for p in os.getenv(name, default).replace("x", ",").split(",") if p.strip()]
@@ -85,8 +74,8 @@ class VisaoServiceOptimized(VisaoService):
         super().__init__(connection)
         self.profiler = StageProfiler("vision")
         self._alert_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="alerts")
-        self._gate = TTLGate()
-        self._setor_cache = TTLCache(ttl=60.0)
+        self._gate = LimitadorTempoChave()
+        self._setor_cache = CacheComTTL(ttl=60.0)
         self._trackers: dict = {}
         self._zone_geo: dict = {}
         self._pose_state: dict = {}
@@ -167,15 +156,15 @@ class VisaoServiceOptimized(VisaoService):
         if iou is not None:
             kw["iou"] = iou
 
-        with prof.stage(f"{kind}.predict(total)"):
+        with prof.etapa(f"{kind}.predict(total)"):
             r = model.predict(frame, **kw)[0]
 
         speed = getattr(r, "speed", None) or {}
         for k in ("preprocess", "inference", "postprocess"):    # tempos internos do ultralytics (ms)
             if k in speed:
-                prof.add(f"{kind}.{k}", speed[k])
+                prof.adicionar_tempo(f"{kind}.{k}", speed[k])
 
-        with prof.stage(f"{kind}.track"):
+        with prof.etapa(f"{kind}.track"):
             if r.boxes is None:
                 tracks = np.empty((0, 8), dtype=np.float32)
             else:
@@ -191,7 +180,7 @@ class VisaoServiceOptimized(VisaoService):
     def _carregar_zonas(self, cam_id: int):
         zonas = self._zonas_de_monitoramento(cam_id)
         self._zone_geo.pop(cam_id, None)
-        self._setor_cache.invalidate()
+        self._setor_cache.invalidar()
         for z in zonas:                       # pré-carrega: o 1º frame com detecção não paga consulta
             try:
                 self._id_setor_da_zona(z.id)
@@ -211,7 +200,7 @@ class VisaoServiceOptimized(VisaoService):
         def load():
             setor = self.setores_repository.get_setor_por_id_zona(zona_id)
             return setor.id if setor else None
-        return self._setor_cache.get(zona_id, load)
+        return self._setor_cache.obter(zona_id, load)
 
     def _active_learning_on(self) -> bool:
         now = time.monotonic()
@@ -242,7 +231,7 @@ class VisaoServiceOptimized(VisaoService):
     def _alerta_epi(self, zona, evento: str, track_id: int, severidade: int):
         if zona.id_monitorar is None:
             return
-        if not self._gate.allow(("epi", zona.id_monitorar, evento, track_id), 30):    # mesmo cooldown de 30 s
+        if not self._gate.permitir(("epi", zona.id_monitorar, evento, track_id), 30):    # mesmo cooldown de 30 s
             return
         self._submit(VisaoService._registrar_alerta_epi_incorreto, self, zona, evento, track_id,
                      severidade=severidade)
@@ -250,7 +239,7 @@ class VisaoServiceOptimized(VisaoService):
     def _amostra(self, id_setor, track_id: int, conforme: bool):
         if not id_setor or track_id == -1:
             return
-        if not self._gate.allow(("stats", id_setor, track_id), 10):                   # mesmo cooldown de 10 s
+        if not self._gate.permitir(("stats", id_setor, track_id), 10):                   # mesmo cooldown de 10 s
             return
         self._submit(VisaoService._registrar_amostra_estatistica, self, id_setor, track_id, conforme)
 
@@ -316,7 +305,7 @@ class VisaoServiceOptimized(VisaoService):
         r, tracks = self._predict_tracked(self.modelo, "det", cam_id, frame,
                                           self.DET_IMGSZ, self.DET_CONF, self.DET_IOU)
 
-        with prof.stage("det.rules"):
+        with prof.etapa("det.rules"):
             if r.boxes is not None and len(r.boxes) and self._active_learning_on():
                 self._processar_active_learning(frame, r.boxes, (h, w))   # frame cru: ninguém o altera mais
 
@@ -378,7 +367,7 @@ class VisaoServiceOptimized(VisaoService):
         r, tracks = self._predict_tracked(self.modelo_pose, "pose", cam_id, frame,
                                           self.POSE_IMGSZ, self.POSE_CONF)
 
-        with prof.stage("pose.rules"):
+        with prof.etapa("pose.rules"):
             if r.keypoints is None or len(tracks) == 0:
                 return pessoas
 
@@ -469,7 +458,7 @@ class VisaoServiceOptimized(VisaoService):
         prof = self.profiler
         now = time.monotonic()
 
-        with prof.stage("total.det"):
+        with prof.etapa("total.det"):
             detections, class_count, det_overlay = self._detect_frame(cam_id, frame, zonas)
 
         st = self._pose_state.setdefault(cam_id, {"last_run": 0.0, "last_people": now, "ema": 0.0})
@@ -487,14 +476,14 @@ class VisaoServiceOptimized(VisaoService):
         if now - st["last_run"] >= intervalo:
             st["last_run"] = now
             t0 = time.perf_counter()
-            with prof.stage("total.pose"):
+            with prof.etapa("total.pose"):
                 pose = self._pose_frame(cam_id, frame)
             dur = time.perf_counter() - t0
             st["ema"] = dur if st["ema"] == 0.0 else 0.7 * st["ema"] + 0.3 * dur
             pose_t = time.monotonic()
             if pose:
                 st["last_people"] = pose_t
-            prof.tick(f"cam{cam_id}.pose_fps")
+            prof.marcar_evento(f"cam{cam_id}.pose_fps")
 
         overlay = {"det": det_overlay, "det_t": time.monotonic(), "pose": pose, "pose_t": pose_t}
         return detections, class_count, overlay
@@ -512,30 +501,30 @@ class VisaoServiceOptimized(VisaoService):
         prof = self.profiler
         stop = stop_event if stop_event is not None else threading.Event()
 
-        transform_cache = TTLCache(ttl=5.0)
+        transform_cache = CacheComTTL(ttl=5.0)
 
         def transform(frame, cam_id):
-            t = transform_cache.get(cam_id, lambda: self.cameras_service.obter_transformacoes_camera(cam_id))
-            return frame if not t else apply_transform(frame, *t)
+            t = transform_cache.obter(cam_id, lambda: self.cameras_service.obter_transformacoes_camera(cam_id))
+            return frame if not t else aplicar_transformacoes(frame, *t)
 
         zonas_por_camera = {c: self._carregar_zonas(c) for c in cameras}
         metricas = {c: FrameMetrics() for c in cameras}
         overlay_store: dict = {}
-        slots = {c: LatestSlot() for c in cameras}
+        slots = {c: UltimoFrameContainer() for c in cameras}
         last_seq = defaultdict(int)
         last_hb = defaultdict(float)
 
         readers, publishers = {}, []
         for c in cameras:
             readers[c] = CameraReader(c, self.open_camera, transform, slots[c], stop, prof,
-                                      max_fps=self.CAPTURE_MAX_FPS)
+                                      fps_maximo=self.CAPTURE_MAX_FPS)
             readers[c].start()
             publishers.append(DisplayPublisher(
                 c, slots[c], overlay_store,
                 frame_queues.get(c) if frame_queues else None,
                 viewer_stamps.get(c) if viewer_stamps else None,
                 stop, self.draw_overlay, prof,
-                target_fps=self.STREAM_FPS, stream_width=self.STREAM_WIDTH, jpeg_quality=self.JPEG_QUALITY))
+                fps_alvo=self.STREAM_FPS, largura_stream=self.STREAM_WIDTH, qualidade_jpeg=self.JPEG_QUALITY))
             publishers[-1].start()
 
         try:
@@ -550,7 +539,7 @@ class VisaoServiceOptimized(VisaoService):
 
                 trabalhou = False
                 for c in cameras:
-                    seq, item = slots[c].peek()
+                    seq, item = slots[c].obter_atual()
                     if item is None or seq <= last_seq[c]:
                         continue
                     last_seq[c] = seq            # frames intermediários são descartados de propósito
@@ -569,9 +558,9 @@ class VisaoServiceOptimized(VisaoService):
                         continue
 
                     overlay_store[c] = overlay    # troca atômica de referência
-                    prof.add("total.frame", (time.perf_counter() - t0) * 1000.0)
-                    prof.add("e2e.capture_to_result", (time.monotonic() - t_cap) * 1000.0)
-                    prof.tick(f"cam{c}.infer_fps")
+                    prof.adicionar_tempo("total.frame", (time.perf_counter() - t0) * 1000.0)
+                    prof.adicionar_tempo("e2e.capture_to_result", (time.monotonic() - t_cap) * 1000.0)
+                    prof.marcar_evento(f"cam{c}.infer_fps")
 
                     # 1 única ida ao Manager por resultado (antes eram ~4 por frame de captura + 4 por resultado)
                     if last_results is not None and c in last_results:
@@ -597,7 +586,7 @@ class VisaoServiceOptimized(VisaoService):
 
                 if not trabalhou:
                     time.sleep(0.002)
-                prof.report()
+                prof.emitir_relatorio()
                 self._flush_estatisticas_para_banco()
         finally:
             print("🛑 Encerrando loop de visão em lote...")
@@ -605,5 +594,5 @@ class VisaoServiceOptimized(VisaoService):
             for t in list(readers.values()) + publishers:
                 t.join(timeout=2)
             self._alert_pool.shutdown(wait=False)
-            prof.report(force=True)
+            prof.emitir_relatorio(forcar=True)
             self._flush_estatisticas_para_banco(forcar=True)

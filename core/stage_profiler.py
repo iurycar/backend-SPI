@@ -1,127 +1,170 @@
-"""
-Profiler leve por etapa para o pipeline de visão.
-
-Uso:
-    prof = StageProfiler("vision")
-
-    with prof.stage("det.postprocess"):
-        ...                                   # mede o tempo (ms) do bloco
-
-    prof.add("det.inference", 42.3)           # registra um valor já medido
-    prof.tick("cam1.infer_fps")               # conta eventos para calcular FPS
-    prof.report()                             # imprime a tabela a cada `report_every` s
-
-Convenções de nome:
-    "total.*" e "e2e.*"  -> agregados (não entram na escolha do "gargalo")
-    demais               -> etapas individuais
-
-Desligar:  VISION_PROFILE=0
-"""
-import os
-import threading
-import time
 from collections import defaultdict, deque
 from contextlib import contextmanager
+import threading
+import time
+import os
 
-ENABLED = os.getenv("VISION_PROFILE", "1") != "0"
-REPORT_EVERY = float(os.getenv("VISION_PROFILE_EVERY", "5"))
+"""
+    Módulo de perfilamento leve por etapas (Stage Profiler) para o pipeline de visão.
 
+    Permite medir com precisão em milissegundos o tempo gasto em cada etapa do processamento
+    (captura, pré-processamento, inferência YOLO, rastreamento ByteTrack, pós-processamento, desenho e codificação JPEG).
+"""
 
-def _pct(sorted_vals: list[float], p: float) -> float:
-    if not sorted_vals:
+PROFILING_ATIVO = os.getenv("VISION_PROFILE", "1") != "0"
+INTERVALO_RELATORIO = float(os.getenv("VISION_PROFILE_EVERY", "5"))
+
+def _calcular_percentil0(valores_ordenados: list[float], percentil: float) -> float:
+    """Calcula o percentil de uma lista de valores ordenados."""
+    if not valores_ordenados:
         return 0.0
-    idx = int(round(p * (len(sorted_vals) - 1)))
-    return sorted_vals[idx]
+
+    indice = int(round(percentil * (len(valores_ordenados) - 1)))
+    
+    return valores_ordenados[indice]
 
 
-def _fps(ts: list[float]) -> float:
-    if len(ts) < 2:
+
+def _calcular_fps(timestamps: list[float]) -> float:
+    """Calcula a taxa de quadros por segundo (FPS) com base no histórico de timestamps."""
+    if len(timestamps) < 2:
         return 0.0
-    span = ts[-1] - ts[0]
-    return (len(ts) - 1) / span if span > 0 else 0.0
+    
+    tempo_total = timestamps[-1] - timestamps[0]
+    return (len(timestamps) - 1) / tempo_total if tempo_total > 0 else 0.0
 
 
 class StageProfiler:
-    def __init__(self, name: str = "vision", window: int = 240,
-                 report_every: float = REPORT_EVERY, enabled: bool = ENABLED,
-                 sink=print):
-        self.name = name
-        self.enabled = enabled
-        self.report_every = report_every
-        self.sink = sink
-        self._lock = threading.Lock()
-        self._ms: dict[str, deque] = defaultdict(lambda: deque(maxlen=window))
-        self._ticks: dict[str, deque] = defaultdict(lambda: deque(maxlen=window))
-        self._next_report = time.monotonic() + report_every
+    """
+        Monitora e calcula estatísticas de desempenho para diferentes etapas do pipeline de visão.
+    """
+    def __init__(
+            self, 
+            nome: str = "visao", 
+            janela_amostras: int = 240,
+            intervalo_relatorio: float = INTERVALO_RELATORIO, 
+            habilitado: bool = PROFILING_ATIVO,
+            saida_log=print
+        ):
+        
+        self.nome = nome
+        self.habilitado = habilitado
+        self.intervalo_relatorio = intervalo_relatorio
+        self.saida_log = saida_log
 
-    # ------------------------------------------------------------------ coleta
+        # Estruturas de dados para armazenar tempos e ticks
+        self._lock = threading.Lock()
+        self._tempos_ms: dict[str, deque] = defaultdict(lambda: deque(maxlen=janela_amostras))
+        self._marcas_tempo: dict[str, deque] = defaultdict(lambda: deque(maxlen=janela_amostras))
+        self._proximo_relatorio = time.monotonic() + intervalo_relatorio
+
     @contextmanager
-    def stage(self, label: str):
-        if not self.enabled:
+    def etapa(self, nome_etapa: str):
+        """
+        Gerenciador de contexto para medir o tempo de execução de um bloco de código.
+        Uso:
+            with profiler.etapa("inferencia.epi"):
+                modelo.predict(...)
+        """
+        
+        if not self.habilitado:
             yield
             return
-        t0 = time.perf_counter()
+        
+        inicio = time.perf_counter()
         try:
             yield
+        
         finally:
-            self.add(label, (time.perf_counter() - t0) * 1000.0)
+            duracao_ms = (time.perf_counter() - inicio) * 1000
+            self.adicionar_tempo(nome_etapa, duracao_ms)
 
-    def add(self, label: str, ms: float) -> None:
-        if not self.enabled:
+    def adicionar_tempo(self, nome_etapa: str, duracao_ms: float) -> None:
+        """Registra manualmente o tempo de execução em milissegundos de uma etapa."""
+        if not self.habilitado:
             return
+        
         with self._lock:
-            self._ms[label].append(float(ms))
+            self._tempos_ms[nome_etapa].append(float(duracao_ms))
 
-    def tick(self, label: str) -> None:
-        if not self.enabled:
+    def marcar_evento(self, identificador_fps: str) -> None:
+        """Registra a ocorrência de um evento para o cálculo contínuo de FPS."""
+        if not self.habilitado:
             return
+        
         with self._lock:
-            self._ticks[label].append(time.monotonic())
+            self._marcas_tempo[identificador_fps].append(time.monotonic())
 
-    # --------------------------------------------------------------- relatório
-    def snapshot(self) -> dict:
-        """Estatísticas atuais (útil para expor num endpoint /metrics)."""
+    
+    def obter_estatisticas(self) -> dict:
+        """Retorna um snapshot das estatísticas atuais de desempenho."""
         with self._lock:
-            ms = {k: list(v) for k, v in self._ms.items()}
-            ticks = {k: list(v) for k, v in self._ticks.items()}
+            copia_tempos = {key: list(value) for key, value in self._tempos_ms.items()}
+            copia_marcas = {key: list(value) for key, value in self._marcas_tempo.items()}
 
-        stages = {}
-        for label, vals in ms.items():
-            s = sorted(vals)
-            stages[label] = {
-                "n": len(s),
-                "mean": sum(s) / len(s),
-                "p50": _pct(s, 0.50),
-                "p95": _pct(s, 0.95),
-                "max": s[-1],
+        estatisticas_etapas = {}
+        for etapa_nome, valores in copia_tempos.items():
+            if not valores:
+                continue
+
+            valores_ord = sorted(valores)
+            estatisticas_etapas[etapa_nome] = {
+                "amostras": len(valores_ord),
+                "media": sum(valores_ord) / len(valores_ord),
+                "p50": _calcular_percentil0(valores_ord, 0.5),
+                "p95": _calcular_percentil0(valores_ord, 0.95),
+                "max": valores_ord[-1]
             }
-        return {"stages": stages, "fps": {k: _fps(v) for k, v in ticks.items()}}
 
-    def report(self, force: bool = False) -> None:
-        if not self.enabled:
+        estatisticas_fps = {key: _calcular_fps(values) for key, values in copia_marcas.items()}
+
+        return {
+            "etapas": estatisticas_etapas,
+            "fps": estatisticas_fps
+        }
+    
+    def emitir_relatorio(self, forcar: bool = False) -> None:
+        """Emite o relatório de métricas noconsole se o intervalo tiver expirado."""
+        
+        if not self.habilitado:
             return
-        now = time.monotonic()
-        if not force and now < self._next_report:
+        
+        agora = time.monotonic()
+        if not forcar and agora < self._proximo_relatorio:
             return
-        self._next_report = now + self.report_every
+        
+        self._proximo_relatorio = agora + self.intervalo_relatorio
 
-        snap = self.snapshot()
-        stages, fps = snap["stages"], snap["fps"]
-        if not stages and not fps:
+        dados = self.obter_estatisticas()
+        etapas, fps = dados["etapas"], dados["fps"]
+        
+        if not etapas and not fps:
             return
 
-        individuais = {k: v for k, v in stages.items()
-                       if not k.startswith(("total.", "e2e."))}
-        gargalo = max(individuais, key=lambda k: individuais[k]["mean"], default=None)
+        # Identifica a etapa individual que mais consome tempo (gargalo do pipeline)
+        etapas_individuais = {key: value for key, value in etapas.items()
+                       if not key.startswith(("total.", "e2e."))}
+        
+        gargalo = max(etapas_individuais, key=lambda k: etapas_individuais[k]["media"], default=None)
 
-        linhas = [f"[perf:{self.name}] {'etapa':<28}{'n':>6}{'média':>9}{'p50':>9}{'p95':>9}{'máx':>9}  (ms)"]
-        for label in sorted(stages):
-            s = stages[label]
-            marca = "  <-- gargalo" if label == gargalo else ""
+        linhas = [
+            f"[PERF:{self.nome.upper()}] {'Etapa':<28}{'Amostras':>6}{'Média':>9}{'P50':>9}{'P95':>9}{'Máx':>9}  (ms)"
+        ]
+        
+        for nome_etapa in sorted(etapas):
+            dados_etapa = etapas[nome_etapa]
+            identificador_gargalo = "  <-- gargalo" if nome_etapa == gargalo else ""
             linhas.append(
-                f"[perf:{self.name}] {label:<28}{s['n']:>6}{s['mean']:>9.1f}"
-                f"{s['p50']:>9.1f}{s['p95']:>9.1f}{s['max']:>9.1f}{marca}"
+                f"[PERF:{self.nome.upper()}] {nome_etapa:<28}"
+                f"{dados_etapa['amostras']:>6}"
+                f"{dados_etapa['media']:>9.1f}"
+                f"{dados_etapa['p50']:>9.1f}"
+                f"{dados_etapa['p95']:>9.1f}"
+                f"{dados_etapa['max']:>9.1f}"
+                f"{identificador_gargalo}"
             )
-        for label in sorted(fps):
-            linhas.append(f"[perf:{self.name}] {label:<28}{fps[label]:>6.1f} fps")
-        self.sink("\n".join(linhas))
+
+        for nome_fps in sorted(fps):
+            linhas.append(f"[PERF:{self.nome.upper()}] {nome_fps:<28}{fps[nome_fps]:>6.1f} fps")
+        
+        self.saida_log("\n".join(linhas))
