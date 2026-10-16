@@ -122,18 +122,18 @@ class VisionWorker:
     def _run_batch(cameras, frame_queues, last_results, stop_event, reload_zones_events, viewer_stamps) -> None:
         try:
             from connection.conn import Connection
-            from services.visao_service_optimized import VisaoServiceOptimized
+            from services.visao_service import VisaoService
 
             connection = Connection().get_connection()
-            visao_service = VisaoServiceOptimized(connection)
+            visao_service = VisaoService(connection)
 
             visao_service.run_batch_video_loop(
                 cameras=cameras,
-                frame_queues=frame_queues,
-                last_results=last_results,
-                stop_event=stop_event,
-                reload_zones_events=reload_zones_events,
-                viewer_stamps=viewer_stamps,
+                frame_filas=frame_queues,
+                ultimos_resultados=last_results,
+                parar_evento=stop_event,
+                recarregar_zonas_eventos=reload_zones_events,
+                carimbos_espectadores=viewer_stamps
             )
 
         except Exception as exc:

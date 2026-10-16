@@ -291,7 +291,7 @@ class DisplayPublisher(threading.Thread):
         self.camera_id = camera_id
         self.compartimento = compartimento
         self.armazenamento_overlays = armazenamento_overlays
-        self.fila = fila_frames
+        self.fila_frames = fila_frames
         self.carimbo_espectador = carimbo_espectador
         self.evento_parada = evento_parada
         self.func_desenhar = func_desenhar
@@ -349,8 +349,8 @@ class DisplayPublisher(threading.Thread):
 
             with self.profiler.etapa("display.redimensionamento"):
                 if self.largura_stream and largura > self.largura_stream:
-                    scale = self.largura_stream / largura
-                    img = cv2.resize(frame, (self.largura_stream, int(altura * scale)),
+                    escala = self.largura_stream / largura
+                    img_final = cv2.resize(frame, (self.largura_stream, int(altura * escala)),
                                      interpolation=cv2.INTER_LINEAR)
                 else:
                     escala = 1.0
@@ -363,7 +363,7 @@ class DisplayPublisher(threading.Thread):
 
             # Compressão em JPEG
             with self.profiler.etapa("display.compressao_jpeg"):
-                sucesso, buffer = cv2.imencode(".jpg", img_final, self.jpeg_params)
+                sucesso, buffer = cv2.imencode(".jpg", img_final, self.parametros_jpeg)
 
             if not sucesso:
                 continue
