@@ -9,7 +9,6 @@ import platform
 import psycopg2
 import logging
 import redis
-import math
 import time
 import cv2
 import os
@@ -132,6 +131,8 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
         self._ultimo_log_erro = 0.0
         self._total_cameras = 1
 
+
+
     # region -------------------- Modelos e Conexões -------------------- #
     def _resolver_caminho_modelo(self, caminho_pt: str) -> str:
         if self.BACKEND != "pt":
@@ -246,6 +247,8 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
             return cv2.CAP_ANY
     # endregion
 
+
+
     # region -------------------- Zonas e Cache -------------------- #
     def _zonas_de_monitoramento(self, id_camera: int) -> list[Zona]:
         """
@@ -318,6 +321,7 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
         return False
     # endregion
 
+
     # region -------------------- Tracking e Inferência -------------------- #
     def _obter_rastreador(self, tipo: str, camera_id: int):
         """ Obtém o rastreador para o tipo e câmera especificados. """
@@ -383,6 +387,7 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
         return resultado, trilhas
     # endregion
     
+
     # region -------------------- Efeitos Colaterais e Alertas -------------------- #
     def _executar_em_segundo_plano(self, funcao, *args, **kwargs):
         """ Executa a função fornecida em uma thread de fundo, lidando com erros de banco de dados e logando falhas. """
@@ -422,7 +427,7 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
         if setor is None:
             return
 
-        responsaveis = self.setores_repository.get_responsaveis_por_id_setor(setor.id)
+        responsaveis = self.setores_repository.get_responsaveis_por_setor(setor.id)
         self.alertas_service.registrar_alertas_com_notificacao_unica(
             monitoramento=monitoramento,
             responsaveis=responsaveis,
@@ -567,7 +572,7 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
             logger.warning(f"Setor não encontrado para câmera {camera_id}.")
             return
 
-        responsaveis = self.setores_repository.get_responsaveis_por_id_setor(setor.id)
+        responsaveis = self.setores_repository.get_responsaveis_por_setor(setor.id)
         sucesso = self.alertas_service.criar_alerta(
             monitoramento=None,
             id_usuario=responsaveis[0] if responsaveis else None,
@@ -581,6 +586,7 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
         if sucesso:
             print(f"⚠️ Alerta emitido: {tipo_deteccao} contínua ({int(decorrido)}s) - Track ID: {track_id}")
     # endregion
+
 
     # region -------------------- Active Learning -------------------- #
     def _verificar_active_learning_ativo(self) -> bool:
@@ -651,6 +657,7 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
         threading.Thread(target=salvar, daemon=True).start()
     # endregion
     
+
     # region -------------------- Detecção e Estimativa de Pose -------------------- #
     def _detectar_objetos_frame(self, camera_id: int, frame, zonas) -> tuple[list[dict], dict[str, int], list[tuple]]:
         altura, largura = frame.shape[:2]
@@ -733,6 +740,12 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
                 return pessoas
 
             keypoints_todas = resultado.keypoints.xy.cpu().numpy()
+            confiancas_todas = (
+                resultado.keypoints.conf.cpu().numpy()
+                if resultado.keypoints.conf is not None
+                else None
+            )
+
             for idx_linha, linha in enumerate(trilhas):
                 indice_det = int(linha[7]) if len(linha) >= 8 else idx_linha
                 track_id = int(linha[4])
@@ -741,57 +754,29 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
                     continue
 
                 pontos = keypoints_todas[indice_det]
+                confs = (
+                    confiancas_todas[indice_det]
+                    if confiancas_todas is not None
+                    else [1.0] * len(pontos)
+                )
+
                 if len(pontos) < 17:
                     continue
 
-                ombro_esq, ombro_dir = pontos[5], pontos[6]
-                quadril_esq, quadril_dir = pontos[11], pontos[12]
-                joelho_esq, joelho_dir = pontos[13], pontos[14]
-                tornozelo_esq, tornozelo_dir = pontos[15], pontos[16]
+                # Repassa pontos e suas respectivas confianças para a avaliação
+                ma_postura, motivo, pt_ombro, pt_quadril, cor_coluna = self._validar_e_avaliar_postura(
+                    camera_id=camera_id,
+                    track_id=track_id,
+                    pontos=pontos,
+                    confs=confs
+                )
 
-                cor_coluna = "ciano"
-                coluna = None
-                pontos_validos = all(p[0] > 0 and p[1] > 0 for p in (ombro_esq, ombro_dir, quadril_esq, quadril_dir))
-
-                if not pontos_validos:
-                    cor_coluna = "cinza"
-                else:
-                    ma_postura, motivo, pt_ombro, pt_quadril = self._avaliar_postura(
-                        "tronco", ombro_esq=ombro_esq, ombro_dir=ombro_dir, quadril_esq=quadril_esq, quadril_dir=quadril_dir
-                    )
-                    if ma_postura:
-                        cor_coluna = "vermelho"
-                    coluna = (pt_ombro, pt_quadril)
-
-                    self._monitorar_tempo_postura(
-                        camera_id=camera_id, track_id=track_id, tipo_deteccao="postura_tronco",
-                        motivo=motivo if ma_postura else "Postura normal", ativo=ma_postura,
-                        tempo_limite_segundos=10, severidade=1
-                    )
-
-                    ma_rot, motivo_rot, _, _ = self._avaliar_postura(
-                        "rotacao", ombro_esq=ombro_esq, ombro_dir=ombro_dir, quadril_esq=quadril_esq, quadril_dir=quadril_dir
-                    )
-                    self._monitorar_tempo_postura(
-                        camera_id=camera_id, track_id=track_id, tipo_deteccao="postura_rotacao",
-                        motivo=motivo_rot if ma_rot else "Sem rotacao excessiva", ativo=ma_rot,
-                        tempo_limite_segundos=10, severidade=1
-                    )
-
-                    queda, motivo_queda, _, _ = self._avaliar_postura(
-                        "queda", ombro_esq=ombro_esq, ombro_dir=ombro_dir, quadril_esq=quadril_esq, quadril_dir=quadril_dir,
-                        joelho_esq=joelho_esq, joelho_dir=joelho_dir, tornozelo_esq=tornozelo_esq, tornozelo_dir=tornozelo_dir
-                    )
-                    self._monitorar_tempo_postura(
-                        camera_id=camera_id, track_id=track_id, tipo_deteccao="queda",
-                        motivo=motivo_queda if queda else "Em pé", ativo=queda,
-                        tempo_limite_segundos=3, severidade=3
-                    )
-
-                pessoas.append({"pontos": pontos, "coluna": coluna, "cor": cor_coluna})
+                coluna = (pt_ombro, pt_quadril) if pt_ombro and pt_quadril else None
+                pessoas.append({"pontos": pontos, "confs": confs, "coluna": coluna, "cor": cor_coluna})
 
         return pessoas
     # endregion
+
 
     # region -------------------- Loop Principal -------------------- #
     def _processar_quadro_camera(self, camera_id: int, frame, zonas, overlay_anterior: dict | None):

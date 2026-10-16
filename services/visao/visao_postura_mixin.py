@@ -122,3 +122,91 @@ class VisaoPosturaMixin:
             return is_ma_postura, motivo, (centro_x, centro_y), (centro_x, centro_y)
 
         return False, "", (0, 0), (0, 0)
+
+    LIMIAR_CONF_KEYPOINT = 0.5  # Confiança mínima para considerar o ponto visível
+
+    def _ponto_valido(self, ponto: tuple[float, float], conf: float) -> bool:
+        """Verifica se o ponto possui coordenadas reais e confiança mínima aceitável."""
+        return ponto[0] > 0 and ponto[1] > 0 and conf >= self.LIMIAR_CONF_KEYPOINT
+
+    def _validar_e_avaliar_postura(self, camera_id: int, track_id: int, pontos, confs):
+        """Avalia a postura apenas se as articulações necessárias estiverem visíveis."""
+        ombro_esq, ombro_dir = pontos[5], pontos[6]
+        quadril_esq, quadril_dir = pontos[11], pontos[12]
+        joelho_esq, joelho_dir = pontos[13], pontos[14]
+        tornozelo_esq, tornozelo_dir = pontos[15], pontos[16]
+
+        conf_ombros_quadris = [confs[5], confs[6], confs[11], confs[12]]
+        pontos_tronco = [ombro_esq, ombro_dir, quadril_esq, quadril_dir]
+
+        tronco_visivel = all(
+            self._ponto_valido(pt, cf)
+            for pt, cf in zip(pontos_tronco, conf_ombros_quadris)
+        )
+
+        if not tronco_visivel:
+            return False, "Articulações oclusas ou fora do campo de visão", None, None, "cinza"
+
+        # Avaliação do Tronco
+        ma_postura, motivo, pt_ombro, pt_quadril = self._avaliar_postura(
+            "tronco",
+            ombro_esq=ombro_esq,
+            ombro_dir=ombro_dir,
+            quadril_esq=quadril_esq,
+            quadril_dir=quadril_dir,
+        )
+        cor_coluna = "vermelho" if ma_postura else "ciano"
+
+        self._monitorar_tempo_postura(
+            camera_id=camera_id,
+            track_id=track_id,
+            tipo_deteccao="postura_tronco",
+            motivo=motivo if ma_postura else "Postura normal",
+            ativo=ma_postura,
+            tempo_limite_segundos=10,
+            severidade=1,
+        )
+
+        # Avaliação de Rotação
+        ma_rot, motivo_rot, _, _ = self._avaliar_postura(
+            "rotacao",
+            ombro_esq=ombro_esq,
+            ombro_dir=ombro_dir,
+            quadril_esq=quadril_esq,
+            quadril_dir=quadril_dir,
+        )
+
+        self._monitorar_tempo_postura(
+            camera_id=camera_id,
+            track_id=track_id,
+            tipo_deteccao="postura_rotacao",
+            motivo=motivo_rot if ma_rot else "Sem rotacao excessiva",
+            ativo=ma_rot,
+            tempo_limite_segundos=10,
+            severidade=1,
+        )
+
+        # Avaliação de Queda
+        queda, motivo_queda, _, _ = self._avaliar_postura(
+            "queda",
+            ombro_esq=ombro_esq,
+            ombro_dir=ombro_dir,
+            quadril_esq=quadril_esq,
+            quadril_dir=quadril_dir,
+            joelho_esq=joelho_esq,
+            joelho_dir=joelho_dir,
+            tornozelo_esq=tornozelo_esq,
+            tornozelo_dir=tornozelo_dir,
+        )
+
+        self._monitorar_tempo_postura(
+            camera_id=camera_id,
+            track_id=track_id,
+            tipo_deteccao="queda",
+            motivo=motivo_queda if queda else "Em pé",
+            ativo=queda,
+            tempo_limite_segundos=3,
+            severidade=3,
+        )
+
+        return ma_postura, motivo, pt_ombro, pt_quadril, cor_coluna

@@ -101,28 +101,30 @@ class VisaoDesenhoMixin:
         # Desenha o esqueleto de pose
         if agora - overlay.get("pose_tempo", 0.0) < self.TEMPO_MAXIMO_OVERLAY:
             for pessoa in overlay.get("pose", ()):
-                pontos = [(int(x * escala), int(y * escala)) for x, y in pessoa.get("pontos", [])]
+                pontos = [(int(x * escala), int(y * escala)) for x, y in pessoa["pontos"]]
+                confs = pessoa.get("confs", [1.0] * len(pontos))
 
-                for x, y in pontos:
-                    if x > 0 and y > 0:
+                # Desenha apenas keypoints visíveis
+                for (x, y), conf in zip(pontos, confs):
+                    if x > 0 and y > 0 and conf >= 0.5:
                         cv2.circle(imagem, (x, y), 4, (0, 255, 180), -1, cv2.LINE_AA)
                         cv2.circle(imagem, (x, y), 5, (20, 20, 20), 1, cv2.LINE_AA)
 
+                # Desenha apenas conexões onde ambos os pontos possuem confiança suficiente
                 for p1, p2 in self.ESQUELETO_CONEXOES:
                     x1, y1 = pontos[p1]
                     x2, y2 = pontos[p2]
-
-                    if x1 > 0 and y1 > 0 and x2 > 0 and y2 > 0:
+                    if (x1 > 0 and y1 > 0 and confs[p1] >= 0.5) and (x2 > 0 and y2 > 0 and confs[p2] >= 0.5):
                         cv2.line(imagem, (x1, y1), (x2, y2), (255, 180, 0), 2, cv2.LINE_AA)
 
+                # Desenha a coluna apenas se válida
                 if pessoa.get("coluna") is not None:
-                    ponto_ombro, ponto_quadril = pessoa["coluna"]
-
+                    p_ombro, p_quadril = pessoa["coluna"]
                     cv2.line(
                         imagem,
-                        (int(ponto_ombro[0] * escala), int(ponto_ombro[1] * escala)),
-                        (int(ponto_quadril[0] * escala), int(ponto_quadril[1] * escala)),
+                        (int(p_ombro[0] * escala), int(p_ombro[1] * escala)),
+                        (int(p_quadril[0] * escala), int(p_quadril[1] * escala)),
                         self.CORES.get(pessoa.get("cor", "ciano"), (255, 255, 0)),
                         4,
-                        cv2.LINE_AA
+                        cv2.LINE_AA,
                     )
