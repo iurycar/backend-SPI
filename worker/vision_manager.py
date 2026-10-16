@@ -108,11 +108,16 @@ def notificar_desligamento_camera(camera_id: int):
 
     print(f"🛑 Câmera {camera_id} desligada e recursos liberados com sucesso.")
 
-def notificar_atualizacao_zonas(camera_id: int):
+def notificar_atualizacao_zonas(camera_id: int = None):
     """
     Notifica o worker da câmera especificada para recarregar as zonas de monitoramento.
     """
-    worker = workers.get(camera_id)
+    if camera_id is None:
+        # Notifica todos os workers
+        for worker in set(workers.values()):
+            worker.reload_zones()
+    else:
+        worker = workers.get(camera_id)
 
-    if worker:
-        worker.reload_zones(camera_id)
+        if worker:
+            worker.reload_zones(camera_id)

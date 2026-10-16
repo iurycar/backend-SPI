@@ -4,10 +4,7 @@ from dataclasses import dataclass, field
 class ZonaDTO:
     nome: str | None
     id_camera: int
-    x: float = 0.0
-    y: float = 0.0
-    largura: float = 1.0
-    altura: float = 1.0
+    poligono: list[list[float]]
     permitido: bool = True
     ids_epis: list[int] | None = field(default_factory=list)
 
@@ -18,10 +15,7 @@ class ZonaDTO:
 
         nome = data.get('nome')
         id_camera = data.get('id_camera')
-        x = data.get('x', 0.0)
-        y = data.get('y', 0.0)
-        largura = data.get('largura', 1.0)
-        altura = data.get('altura', 1.0)
+        poligono = data.get('poligono')
         permitido = data.get('permitido', True)
         ids_epis = data.get('ids_epis', None)
 
@@ -31,11 +25,11 @@ class ZonaDTO:
         if not isinstance(id_camera, int):
             raise ValueError("ID da câmera must be an integer.")
         
-        if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
-            raise ValueError("Coordinates x and y must be numbers.")
+        if not isinstance(poligono, list):
+            raise ValueError("Polígono must be a list.")
         
-        if not isinstance(largura, (int, float)) or not isinstance(altura, (int, float)):
-            raise ValueError("Width and height must be numbers.")
+        if not all(isinstance(ponto, list) and len(ponto) == 2 and all(isinstance(coord, (int, float)) for coord in ponto) for ponto in poligono):
+            raise ValueError("Polígono must be a list of lists with two float coordinates each.")
         
         if not isinstance(permitido, bool):
             raise ValueError("Permitido must be a boolean.")
@@ -47,10 +41,7 @@ class ZonaDTO:
         return cls(
             nome=nome,
             id_camera=id_camera,
-            x=float(x),
-            y=float(y),
-            largura=float(largura),
-            altura=float(altura),
+            poligono=poligono,
             permitido=permitido,
             ids_epis=ids_epis
         )

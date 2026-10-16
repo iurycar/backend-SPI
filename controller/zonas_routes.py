@@ -68,12 +68,14 @@ def create_zonas_bp(connection):
         camera_id = zonas_service.obter_id_camera_por_zona(zona_id)
         sucesso = zonas_service.deletar_zona(zona_id)
         
-        if sucesso:
-            if camera_id is not None:
-                notificar_atualizacao_zonas(camera_id)
-                
-            return jsonify({"message": "Zona deletada com sucesso"}), 200
+        if not sucesso:
+            return jsonify({"message": "Não foi possível excluir a zona ou zona não encontrada."}), 400
+        
+        if camera_id:
+            notificar_atualizacao_zonas(camera_id)
         else:
-            return jsonify({"error": "Falha ao deletar a zona"}), 400
+            notificar_atualizacao_zonas()
+            
+        return jsonify({"message": "Zona deletada com sucesso"}), 200        
 
     return zonas_bp

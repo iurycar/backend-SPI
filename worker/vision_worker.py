@@ -2,9 +2,8 @@ import multiprocessing as mp
 import traceback
 import time
 
-from services.visao_service import VisaoService
-from connection.conn import Connection
 from core.vision_metrics import detection_snapshot
+
 
 class VisionWorker:
     def __init__(self, cameras_lote: list[int] = None, camera_id: int = None):
@@ -21,21 +20,26 @@ class VisionWorker:
         self.reload_zones_events = {}
         self.reload_camera_events = {}
         self.frame_queues = {}
+        self.viewer_stamps = {}     # camera_id -> instante (time.time) do último pedido de frame pela rota /video
         self.last_results = None
+        self._manager = None        # criado 1x e reaproveitado nos restarts (antes: 1 processo Manager por start())
 
     def start(self) -> None:
         if self.process is not None and self.process.is_alive():
             return
 
         self.stop_event = mp.Event()
-        manager = mp.Manager()
+        if self._manager is None:
+            self._manager = mp.Manager()
+        manager = self._manager
         self.last_results = manager.dict()
+        self.viewer_stamps = {}
 
         for camera_id in self.cameras:
-            self.reload_zones_events[camera_id] = mp.Event() # Evento para sinalizar recarregamento de zonas
-            self.frame_queues[camera_id] = mp.Queue(maxsize=1) # Fila de tamanho 1 para armazenar apenas o último frame
+            self.reload_zones_events[camera_id] = mp.Event()      # sinaliza recarregamento de zonas
+            self.frame_queues[camera_id] = mp.Queue(maxsize=1)    # só o último frame JPEG
+            self.viewer_stamps[camera_id] = mp.Value('d', 0.0, lock=False)
 
-            # Inicializa o dicionário de resultados para cada câmera
             camera_data = manager.dict()
             camera_data['detections'] = []
             camera_data['class_count'] = {}
@@ -44,21 +48,18 @@ class VisionWorker:
             camera_data['result'] = {}
             self.last_results[camera_id] = camera_data
 
-
         self.process = mp.Process(
             target=self._run_batch,
-            args=(self.cameras, 
-                self.frame_queues, 
-                self.last_results, 
-                self.stop_event, 
-                self.reload_zones_events
-            ),
+            args=(self.cameras,
+                  self.frame_queues,
+                  self.last_results,
+                  self.stop_event,
+                  self.reload_zones_events,
+                  self.viewer_stamps),
             daemon=True,
         )
-
         self.process.start()
-    
-        
+
     def reload_zones(self, camera_id: int = None) -> None:
         if camera_id:
             event = self.reload_zones_events.get(camera_id)
@@ -71,7 +72,6 @@ class VisionWorker:
                     event.set()
                     print(f"🔄 Worker de visão para a câmera {cam_id} recebeu sinal para recarregar zonas.")
 
-
     def stop(self) -> None:
         if self.stop_event is not None:
             self.stop_event.set()
@@ -79,19 +79,28 @@ class VisionWorker:
         if self.process is not None:
             if self.process.is_alive():
                 self.process.join(timeout=3)
-                
+
                 # Se após 3 segundos o processo ainda não encerrou (travado no OpenCV/RTSP), força a finalização
                 if self.process.is_alive():
                     print("⚠️ Processo do worker não encerrou a tempo. Forçando terminação (terminate)...")
                     self.process.terminate()
                     self.process.join(timeout=1)
-                    
+
                     if self.process.is_alive():
                         self.process.kill()
                         self.process.join()
 
             self.process = None
 
+    def close(self) -> None:
+        """Encerramento definitivo (não vai reiniciar): para o processo e derruba o Manager."""
+        self.stop()
+        if self._manager is not None:
+            try:
+                self._manager.shutdown()
+            except Exception:
+                pass
+            self._manager = None
 
     def update_camera(self, camera_id: int) -> None:
         """
@@ -101,47 +110,57 @@ class VisionWorker:
             self.cameras.append(camera_id)
             print(f"🔄 Worker de visão atualizado para incluir câmera {camera_id}. Câmeras atuais: {self.cameras}")
 
-        # Encerra completamente o processo anterior antes de limpar estruturas
         self.stop()
 
-        # Limpa e reinicializa eventos e filas
         self.frame_queues.clear()
         self.reload_zones_events.clear()
 
-        # Reinicia o processo com a lista de câmeras atualizada
         self.start()
         print(f"✅ Worker de visão reiniciado para a câmera {camera_id} com as novas configurações.")
 
     @staticmethod
-    def _run_batch(cameras, frame_queues, last_results, stop_event, reload_zones_events) -> None:
+    def _run_batch(cameras, frame_queues, last_results, stop_event, reload_zones_events, viewer_stamps) -> None:
         try:
             from connection.conn import Connection
-            connection = Connection().get_connection()
+            from services.visao_service import VisaoService
 
+            connection = Connection().get_connection()
             visao_service = VisaoService(connection)
 
             visao_service.run_batch_video_loop(
                 cameras=cameras,
-                frame_queues=frame_queues,
-                last_results=last_results,
-                stop_event=stop_event,
-                reload_zones_events=reload_zones_events,
+                frame_filas=frame_queues,
+                ultimos_resultados=last_results,
+                parar_evento=stop_event,
+                recarregar_zonas_eventos=reload_zones_events,
+                carimbos_espectadores=viewer_stamps
             )
 
         except Exception as exc:
             print(f"❌ Worker de lote falhou: {exc}")
             traceback.print_exc()
 
-    def next_frame(self, camera_id: int = None) -> bytes | None:
+    def next_frame(self, camera_id: int = None, timeout: float = 0.0) -> bytes | None:
+        """
+        Próximo JPEG da câmera.
+        timeout=0  -> comportamento antigo (não bloqueia).
+        timeout>0  -> espera até `timeout` s: a rota não precisa de sleep/polling (tira até 30 ms de latência).
+        Cada chamada também marca "tem espectador", que liga o resize/desenho/JPEG no processo de visão.
+        """
         if camera_id is None:
             return None
 
-        queue = self.frame_queues.get(camera_id)
+        stamp = self.viewer_stamps.get(camera_id)
+        if stamp is not None:
+            stamp.value = time.time()
 
+        queue = self.frame_queues.get(camera_id)
         if not queue:
             return None
-        
+
         try:
+            if timeout > 0:
+                return queue.get(timeout=timeout)
             return queue.get_nowait()
         except Exception:
             return None
@@ -173,7 +192,7 @@ class VisionWorker:
 
         if not cam_info:
             return False
-        
+
         connected = cam_info.get('connected', False)
         last_frame_time = cam_info.get('last_frame_time', 0)
 
