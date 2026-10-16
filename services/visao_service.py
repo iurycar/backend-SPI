@@ -289,10 +289,15 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
         if cache is not None and cache[0] == (largura, altura) and cache[1] is zonas:
             return cache[2]
 
-        geometria = [
-            (zona, self.regiao_para_pixels(zona.poligono, largura, altura))
-            for zona in zonas
-        ]
+        # Elimina zonas duplicadas com base no ID da zona
+        zonas_unicas = {zona.id: zona for zona in zonas if zona.id is not None}
+
+        geometria = []
+        for zona in zonas_unicas.values():
+            pontos = getattr(zona, 'poligono', None) or getattr(zona, 'poligono', None) or []
+            if pontos and len(pontos) >= 3:
+                pts_pixels = self.regiao_para_pixels(pontos, largura, altura)
+                geometria.append((zona, pts_pixels))
 
         self._geometria_zonas[camera_id] = ((largura, altura), zonas, geometria)
         
@@ -695,42 +700,74 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
                 nome_formatado = nome_rotulo.capitalize().replace("_", " ")
                 zonas_do_objeto = []
 
+                pessoa_em_zona_restrita = False
+                pessoa_em_zona_permitida = False
+
+                alerta_epi_registrado = False
+
                 for zona, poligono_pixels in geometria:
                     if not self.objeto_intersecta_poligono(coordenadas_xyxy, poligono_pixels):
                         continue
 
-                    if self._zona_requer_classe(zona.epis_categoria, classe_epi, zona.permitido):
-                        zonas_do_objeto.append(zona.id)
-                        id_setor = self._obter_id_setor_da_zona(zona.id)
+                    zonas_do_objeto.append(zona.id)
+                    id_setor = self._obter_id_setor_da_zona(zona.id)
 
-                        if nome_rotulo.startswith("sem_"):
-                            overlay_caixas.append(("box", coordenadas_xyxy, nome_formatado, "vermelho"))
-                            self._disparar_alerta_epi(zona, f"Sem EPI necessário: {classe_epi}", track_id, 2)
-                            self._registrar_amostra_conformidade(id_setor, track_id, False)
-                        
-                        elif nome_rotulo.endswith("_chapeu"):
-                            overlay_caixas.append(("box", coordenadas_xyxy, nome_formatado, "amarelo"))
-                            self._disparar_alerta_epi(zona, f"Equipamento inadequado: {classe_epi}", track_id, 1)
-                            self._registrar_amostra_conformidade(id_setor, track_id, False)
-                        
-                        elif nome_rotulo.endswith("_normal"):
-                            overlay_caixas.append(("box", coordenadas_xyxy, nome_formatado.replace("normal", ""), "verde"))
-                            self._registrar_amostra_conformidade(id_setor, track_id, True)
-                        
-                        else:
-                            overlay_caixas.append(("box", coordenadas_xyxy, nome_formatado, "verde"))
-                            self._registrar_amostra_conformidade(id_setor, track_id, True)
-                    
+                    # Regras para classes de EPI
+                    if self._zona_requer_classe(zona.epis_categoria, classe_epi, zona.permitido):
+                        if not alerta_epi_registrado:
+                            if nome_rotulo.startswith("sem_"):
+                                overlay_caixas.append(("box", coordenadas_xyxy, nome_formatado, "vermelho"))
+                                self._disparar_alerta_epi(zona, f"Sem EPI necessário: {classe_epi}", track_id, 2)
+                                self._registrar_amostra_conformidade(id_setor, track_id, False)
+                            
+                            elif nome_rotulo.endswith("_chapeu"):
+                                overlay_caixas.append(("box", coordenadas_xyxy, nome_formatado, "amarelo"))
+                                self._disparar_alerta_epi(zona, f"Equipamento inadequado: {classe_epi}", track_id, 1)
+                                self._registrar_amostra_conformidade(id_setor, track_id, False)
+                            
+                            elif nome_rotulo.endswith("_normal"):
+                                overlay_caixas.append(("box", coordenadas_xyxy, nome_formatado.replace("normal", ""), "verde"))
+                                self._registrar_amostra_conformidade(id_setor, track_id, True)
+                            
+                            else:
+                                overlay_caixas.append(("box", coordenadas_xyxy, nome_formatado, "verde"))
+                                self._registrar_amostra_conformidade(id_setor, track_id, True)
+
+                            alerta_epi_registrado = True
+
+                    # Regras para quando a detecção é de pessoa
                     if nome_rotulo == "pessoa":
                         if not self._zona_requer_classe(zona.epis_categoria, "pessoa", zona.permitido):
-                            overlay_caixas.append(("box", coordenadas_xyxy, f"Pessoa ID: {track_id} (Zona restrita)", "amarelo"))
+                            pessoa_em_zona_restrita = True
                             self._disparar_alerta_epi(zona, "Pessoa em zona restrita", track_id, 3)
                         else:
-                            overlay_caixas.append(("box", coordenadas_xyxy, f"Pessoa ID: {track_id}", "branco"))
-                
+                            pessoa_em_zona_permitida = True
+
+                # Decisão do overlay de pessoa
+                if nome_rotulo == "pessoa":
+                    if pessoa_em_zona_restrita:
+                        overlay_caixas.append(("box", coordenadas_xyxy, nome_formatado, "vermelho"))
+                    elif pessoa_em_zona_permitida:
+                        overlay_caixas.append(("box", coordenadas_xyxy, nome_formatado, "ciano"))
+                    else:
+                        overlay_caixas.append(("box", coordenadas_xyxy, nome_formatado, "branco"))     
+               
                 contagem_classes[nome_rotulo] += 1
-                for zona_id in zonas_do_objeto:
-                    deteccoes.append({"id": track_id, "label": nome_rotulo, "confidence": conf, "zona": zona_id})
+
+                if zonas_do_objeto:
+                    deteccoes.append({
+                        "id": track_id,
+                        "label": nome_rotulo,
+                        "confidence": conf,
+                        "zona": zonas_do_objeto[0],
+                    })
+                else:
+                    deteccoes.append({
+                        "id": track_id,
+                        "label": nome_rotulo,
+                        "confidence": conf,
+                        "zona": None,
+                    })
 
         return deteccoes, contagem_classes, overlay_caixas
 

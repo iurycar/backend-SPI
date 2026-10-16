@@ -124,7 +124,7 @@ class StageProfiler:
         }
     
     def emitir_relatorio(self, forcar: bool = False) -> None:
-        """Emite o relatório de métricas noconsole se o intervalo tiver expirado."""
+        """Emite o relatório de métricas no console se o intervalo tiver expirado."""
         
         if not self.habilitado:
             return
@@ -167,4 +167,4 @@ class StageProfiler:
         for nome_fps in sorted(fps):
             linhas.append(f"[PERF:{self.nome.upper()}] {nome_fps:<28}{fps[nome_fps]:>6.1f} fps")
         
-        self.saida_log("\n".join(linhas))
+        self.saida_log("\n"+"\n".join(linhas)+"\n")
