@@ -1,4 +1,5 @@
 from models.zonas import Zona
+import json
 
 class ZonasRepository:
     def __init__(self, connection):
@@ -11,10 +12,7 @@ class ZonasRepository:
                     z.id_zona,
                     z.nome,
                     z.id_camera,
-                    z.x,
-                    z.y,
-                    z.largura,
-                    z.altura,
+                    z.poligono,
                     z.permitido,
                     COALESCE(
                         ARRAY_AGG(DISTINCT e.categoria) FILTER (WHERE e.categoria IS NOT NULL), 
@@ -43,13 +41,10 @@ class ZonasRepository:
                     id=zona[0],
                     nome=zona[1],
                     id_camera=zona[2],
-                    x=float(zona[3]),
-                    y=float(zona[4]),
-                    largura=float(zona[5]),
-                    altura=float(zona[6]),
-                    permitido=bool(zona[7]),
-                    epis_categoria=list(zona[8]),
-                    epis_id=list(zona[9])
+                    poligono=zona[3] if isinstance(zona[3], list) else json.loads(zona[3]),
+                    permitido=bool(zona[4]),
+                    epis_categoria=list(zona[5]),
+                    epis_id=list(zona[6])
                 ))
 
             return zonas_lista
@@ -61,10 +56,7 @@ class ZonasRepository:
                     z.id_zona,
                     z.nome,
                     z.id_camera,
-                    z.x,
-                    z.y,
-                    z.largura,
-                    z.altura,
+                    z.poligono,
                     z.permitido,
                     COALESCE(
                         ARRAY_AGG(DISTINCT e.categoria) FILTER (WHERE e.categoria IS NOT NULL), 
@@ -88,13 +80,10 @@ class ZonasRepository:
                     id=zona[0],
                     nome=zona[1],
                     id_camera=zona[2],
-                    x=float(zona[3]),
-                    y=float(zona[4]),
-                    largura=float(zona[5]),
-                    altura=float(zona[6]),
-                    permitido=bool(zona[7]),
-                    epis_categoria=list(zona[8]),
-                    epis_id=list(zona[9])
+                    poligono=zona[3] if isinstance(zona[3], list) else json.loads(zona[3]),
+                    permitido=bool(zona[4]),
+                    epis_categoria=list(zona[5]),
+                    epis_id=list(zona[6])
                 )
             else:
                 return None
@@ -106,10 +95,7 @@ class ZonasRepository:
                     z.id_zona,
                     z.nome,
                     z.id_camera,
-                    z.x,
-                    z.y,
-                    z.largura,
-                    z.altura,
+                    z.poligono,
                     z.permitido,
                     COALESCE(
                         ARRAY_AGG(DISTINCT e.categoria) FILTER (WHERE e.categoria IS NOT NULL), 
@@ -137,13 +123,10 @@ class ZonasRepository:
                         id=zona[0],
                         nome=zona[1],
                         id_camera=zona[2],
-                        x=float(zona[3]),
-                        y=float(zona[4]),
-                        largura=float(zona[5]),
-                        altura=float(zona[6]),
-                        permitido=bool(zona[7]),
-                        epis_categoria=list(zona[8]),
-                        epis_id=list(zona[9])
+                        poligono=zona[3] if isinstance(zona[3], list) else json.loads(zona[3]),
+                        permitido=bool(zona[4]),
+                        epis_categoria=list(zona[5]),
+                        epis_id=list(zona[6])
                     ))
 
                 return zonas_lista
@@ -163,10 +146,7 @@ class ZonasRepository:
     def registrar_zona(self, 
                        nome: str | None, 
                        id_camera: int, 
-                       x: float = 0.0, 
-                       y: float = 0.0, 
-                       largura: float = 1.0, 
-                       altura: float = 1.0, 
+                       poligono: list[list[float]],
                        permitido: bool = True, 
                        ids_epis: list[int] | None = None
     ) -> Zona | None:
@@ -175,11 +155,11 @@ class ZonasRepository:
             try:
                 cursor.execute(
                     """
-                    INSERT INTO zonas (nome, x, y, largura, altura, id_camera, permitido)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO zonas (nome, poligono, id_camera, permitido)
+                    VALUES (%s, %s, %s, %s)
                     RETURNING id_zona
                     """,
-                    (nome, x, y, largura, altura, id_camera, permitido)
+                    (nome, json.dumps(poligono), id_camera, permitido)
                 )
                 zona_criada = cursor.fetchone()
                 if not zona_criada:
@@ -223,10 +203,7 @@ class ZonasRepository:
                        zona_id: int, 
                        nome: str | None, 
                        id_camera: int, 
-                       x: float = 0.0, 
-                       y: float = 0.0, 
-                       largura: float = 1.0, 
-                       altura: float = 1.0, 
+                       poligono: list[list[float]],
                        permitido: bool = True,
                        ids_epis: list[int] | None = None
         ) -> Zona | None:
@@ -237,10 +214,10 @@ class ZonasRepository:
                 cursor.execute(
                     """
                     UPDATE zonas 
-                    SET nome = %s, x = %s, y = %s, largura = %s, altura = %s, id_camera = %s, permitido = %s 
+                    SET nome = %s, poligono = %s, id_camera = %s, permitido = %s 
                     WHERE id_zona = %s
                     """,
-                    (nome, x, y, largura, altura, id_camera, permitido, zona_id)
+                    (nome, json.dumps(poligono), id_camera, permitido, zona_id)
                 )
 
                 if ids_epis is not None:

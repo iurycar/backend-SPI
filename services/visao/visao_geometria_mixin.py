@@ -1,3 +1,6 @@
+import numpy as np
+import cv2
+
 """
     Mixin para cálculos geométricos e conversão de coordenadas de regiões e bounding boxes.
 """
@@ -36,7 +39,7 @@ class VisaoGeometriaMixin:
             for ponto in regiao
         ]
 
-    def _caixas_intersectam(self, caixa1: tuple, caixa2: tuple) -> bool:
+    def caixas_intersectam(self, caixa1: tuple, caixa2: tuple) -> bool:
         """Verifica sobreposição entre duas caixas (x1, y1, x2, y2)."""
         x11, y11, x12, y12 = caixa1
         x21, y21, x22, y22 = caixa2
@@ -58,3 +61,27 @@ class VisaoGeometriaMixin:
         ys = [p[1] for p in regiao]
 
         return min(xs), min(ys), max(xs), max(ys)
+
+    def objeto_intersecta_poligono(self, caixa_xyxy: tuple, poligono_pixels: list | np.ndarray) -> bool:
+        """
+        Verifica se a base/pés da detecção está dentro do contorno do polígono.
+        """
+        # Proteção contra polígono vazio ou incompleto (mínimo de 3 vértices)
+        if poligono_pixels is None or len(poligono_pixels) < 3:
+            return False
+
+        # Converte para array com tipo np.int32 ou np.float32 exigido pelo OpenCV
+        contorno = np.array(poligono_pixels, dtype=np.int32)
+
+        # Garante que o contorno tenha pelo menos 3 pontos reais após a conversão
+        if contorno.shape[0] < 3:
+            return False
+
+        # Ponto de contato no chão (centro horizontal e base da bounding box)
+        x1, y1, x2, y2 = caixa_xyxy
+        pe_x = float((x1 + x2) / 2.0)
+        pe_y = float(y2)
+
+        # Executa a checagem
+        distancia = cv2.pointPolygonTest(contorno, (pe_x, pe_y), measureDist=False)
+        return distancia >= 0

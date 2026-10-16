@@ -45,6 +45,10 @@ MODEL_PATH_POSE = os.path.join(BASE_DIR, 'assets', 'modelo', 'treinamento', 'yol
 logger = logging.getLogger(__name__)
 
 def _obter_dimensao_env(nome_variavel: str, valor_padrao: int) -> int:
+    """
+        Obtém a dimensão de imagem a partir de uma variável de ambiente, permitindo múltiplos valores separados por vírgula ou 'x'. 
+        Retorna o primeiro valor se houver apenas um.
+    """
     partes = [int(p) for p in os.getenv(nome_variavel, valor_padrao).replace("x", ",").split(",") if p.strip()]
     return partes[0] if len(partes) == 1 else partes
 
@@ -130,7 +134,6 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
 
         self._ultimo_log_erro = 0.0
         self._total_cameras = 1
-
 
 
     # region -------------------- Modelos e Conexões -------------------- #
@@ -248,7 +251,6 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
     # endregion
 
 
-
     # region -------------------- Zonas e Cache -------------------- #
     def _zonas_de_monitoramento(self, id_camera: int) -> list[Zona]:
         """
@@ -287,7 +289,11 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
         if cache is not None and cache[0] == (largura, altura) and cache[1] is zonas:
             return cache[2]
 
-        geometria = [(zona, self.regiao_para_caixa(self.regiao_para_pixels(zona.regiao, largura, altura))) for zona in zonas]
+        geometria = [
+            (zona, self.regiao_para_pixels(zona.poligono, largura, altura))
+            for zona in zonas
+        ]
+
         self._geometria_zonas[camera_id] = ((largura, altura), zonas, geometria)
         
         return geometria
@@ -689,8 +695,8 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
                 nome_formatado = nome_rotulo.capitalize().replace("_", " ")
                 zonas_do_objeto = []
 
-                for zona, caixa_zona in geometria:
-                    if not self._caixas_intersectam(coordenadas_xyxy, caixa_zona):
+                for zona, poligono_pixels in geometria:
+                    if not self.objeto_intersecta_poligono(coordenadas_xyxy, poligono_pixels):
                         continue
 
                     if self._zona_requer_classe(zona.epis_categoria, classe_epi, zona.permitido):
@@ -698,17 +704,17 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
                         id_setor = self._obter_id_setor_da_zona(zona.id)
 
                         if nome_rotulo.startswith("sem_"):
-                            overlay_caixas.append(('box', coordenadas_xyxy, nome_formatado, 'vermelho'))
+                            overlay_caixas.append(("box", coordenadas_xyxy, nome_formatado, "vermelho"))
                             self._disparar_alerta_epi(zona, f"Sem EPI necessário: {classe_epi}", track_id, 2)
                             self._registrar_amostra_conformidade(id_setor, track_id, False)
                         
                         elif nome_rotulo.endswith("_chapeu"):
-                            overlay_caixas.append(('box', coordenadas_xyxy, nome_formatado, 'amarelo'))
+                            overlay_caixas.append(("box", coordenadas_xyxy, nome_formatado, "amarelo"))
                             self._disparar_alerta_epi(zona, f"Equipamento inadequado: {classe_epi}", track_id, 1)
                             self._registrar_amostra_conformidade(id_setor, track_id, False)
                         
                         elif nome_rotulo.endswith("_normal"):
-                            overlay_caixas.append(("box", coordenadas_xyxy, nome_formatado.replace("Normal", ""), "verde"))
+                            overlay_caixas.append(("box", coordenadas_xyxy, nome_formatado.replace("normal", ""), "verde"))
                             self._registrar_amostra_conformidade(id_setor, track_id, True)
                         
                         else:

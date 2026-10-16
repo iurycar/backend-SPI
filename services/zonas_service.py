@@ -12,10 +12,7 @@ class ZonasService:
         return {
             'id': zona.id,
             'nome': zona.nome,
-            'x': zona.x,
-            'y': zona.y,
-            'largura': zona.largura,
-            'altura': zona.altura,
+            'poligono': zona.poligono,
             'permitido': zona.permitido,
             'id_camera': zona.id_camera,
             'epis_categoria': zona.epis_categoria,
@@ -87,10 +84,7 @@ class ZonasService:
         zona = self.zonas_repository.registrar_zona(
             zona_dto.nome,
             zona_dto.id_camera,
-            zona_dto.x,
-            zona_dto.y,
-            zona_dto.largura,
-            zona_dto.altura,
+            zona_dto.poligono,
             zona_dto.permitido,
             ids_epis=zona_dto.ids_epis
         )
@@ -115,10 +109,7 @@ class ZonasService:
             zona_id,
             zona_dto.nome,
             zona_dto.id_camera,
-            zona_dto.x,
-            zona_dto.y,
-            zona_dto.largura,
-            zona_dto.altura,
+            zona_dto.poligono,
             zona_dto.permitido,
             ids_epis=zona_dto.ids_epis
         )
