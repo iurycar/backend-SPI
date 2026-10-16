@@ -77,6 +77,9 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
     DET_MIN_CONF = 0.5
     POSE_CONF = 0.5
 
+    # Se não detectar o EPI por 5 segundos, considera como ausente
+    EPI_AUSENTE_TOLERANCIA = 5.0
+
     STREAM_FPS = float(os.getenv("STREAM_FPS", "30"))
     STREAM_LARGURA = int(os.getenv("STREAM_WIDTH", "960"))
     JPEG_QUALIDADE = int(os.getenv("JPEG_QUALITY", "75"))
@@ -131,6 +134,7 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
         self._estado_pose = {}
         self._postura_inicio = {}
         self._postura_emitido = {}
+        self._epi_ausente_inicio = {}
 
         self._ultimo_log_erro = 0.0
         self._total_cameras = 1
@@ -462,6 +466,37 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
         self._executar_em_segundo_plano(self._registrar_alerta_epi_incorreto, zona, evento, track_id, severidade)
 
 
+    def _avaliar_epi_ausente(
+        self, camera_id: int, track_id: int, zona: Zona, classe_epi: str, ausente: bool, tolerancia_seg: float = EPI_AUSENTE_TOLERANCIA
+    ) -> bool:
+        """
+        Retorna True se o EPI obrigatório continuar ausente (não detectado) além do tempo de tolerância.
+        """
+        chave = (camera_id, track_id, zona.id, classe_epi)
+        agora = time.monotonic()
+
+        if not ausente:
+            self._epi_ausente_inicio.pop(chave, None)
+            return False
+
+        registro = self._epi_ausente_inicio.get(chave)
+        # registro[0] = timestamp do início da ausência | registro[1] = timestamp do último frame avaliado
+        if registro is None or (agora - registro[1]) > 10.0:
+            registro = [agora, agora]
+            self._epi_ausente_inicio[chave] = registro
+        else:
+            registro[1] = agora
+
+        # Limpeza preventiva de memória usando registro[1]
+        if len(self._epi_ausente_inicio) > 2000:
+            self._epi_ausente_inicio = {
+                k: v for k, v in self._epi_ausente_inicio.items() if (agora - v[1]) < 15.0
+            }
+
+        # Compara o tempo decorrido desde o início da ausência (registro[0])
+        return (agora - registro[0]) >= tolerancia_seg
+    
+
     def _registrar_amostra_estatistica(self, id_setor: int, track_id: int, conforme: bool) -> None:
         """ Registra uma amostragem temporizada de estatística para o setor especificado no Redis. """
         if not id_setor or track_id == -1:
@@ -684,8 +719,13 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
             if resultado.boxes is not None and len(resultado.boxes) > 0:
                 self._processar_active_learning(frame, resultado.boxes, (altura, largura))
 
-            geometria = self._obter_geometria_zonas(camera_id, largura, altura, self._zonas_de_monitoramento(camera_id))
+            # Usa as zonas já carregadas em memória para evitar consultas repetidas ao banco de dados
+            zonas_ativas = zonas if zonas is not None else self._zonas_de_monitoramento(camera_id)
+            geometria = self._obter_geometria_zonas(camera_id, largura, altura, zonas_ativas)
             nomes_classes = self.modelo.names
+
+            pessoas_detectadas: list[dict] = []
+            epis_detectados: list[dict] = []
 
             for linha in trilhas.tolist():
                 x1, y1, x2, y2, tid, conf, cls = linha[:7]
@@ -693,81 +733,171 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
                 if conf < self.DET_MIN_CONF:
                     continue
 
-                track_id = int(tid)
-                coordenadas_xyxy = (int(x1), int(y1), int(x2), int(y2))
-                nome_rotulo = nomes_classes[int(cls)].lower()
-                classe_epi = self._classe_epi_por_label(nome_rotulo)
-                nome_formatado = nome_rotulo.capitalize().replace("_", " ")
-                zonas_do_objeto = []
+                item = {
+                    "track_id": int(tid),
+                    "xyxy": (int(x1), int(y1), int(x2), int(y2)),
+                    "conf": conf,
+                    "rotulo": nomes_classes[int(cls)].lower(),
+                }
 
-                pessoa_em_zona_restrita = False
-                pessoa_em_zona_permitida = False
+                contagem_classes[item["rotulo"]] += 1
 
-                alerta_epi_registrado = False
+                if item["rotulo"] == "pessoa":
+                    pessoas_detectadas.append(item)
+                else:
+                    epis_detectados.append(item)
+
+            # Avalia em quais zonas cada PESSOA está pisando
+            for pessoa in pessoas_detectadas:
+                zonas_da_pessoa = []
+                em_zona_restrita = False
+                em_zona_permitida = False
 
                 for zona, poligono_pixels in geometria:
-                    if not self.objeto_intersecta_poligono(coordenadas_xyxy, poligono_pixels):
+                    if not self.objeto_intersecta_poligono(pessoa["xyxy"], poligono_pixels):
                         continue
 
-                    zonas_do_objeto.append(zona.id)
-                    id_setor = self._obter_id_setor_da_zona(zona.id)
+                    zonas_da_pessoa.append(zona)
 
-                    # Regras para classes de EPI
-                    if self._zona_requer_classe(zona.epis_categoria, classe_epi, zona.permitido):
-                        if not alerta_epi_registrado:
-                            if nome_rotulo.startswith("sem_"):
-                                overlay_caixas.append(("box", coordenadas_xyxy, nome_formatado, "vermelho"))
-                                self._disparar_alerta_epi(zona, f"Sem EPI necessário: {classe_epi}", track_id, 2)
-                                self._registrar_amostra_conformidade(id_setor, track_id, False)
-                            
-                            elif nome_rotulo.endswith("_chapeu"):
-                                overlay_caixas.append(("box", coordenadas_xyxy, nome_formatado, "amarelo"))
-                                self._disparar_alerta_epi(zona, f"Equipamento inadequado: {classe_epi}", track_id, 1)
-                                self._registrar_amostra_conformidade(id_setor, track_id, False)
-                            
-                            elif nome_rotulo.endswith("_normal"):
-                                overlay_caixas.append(("box", coordenadas_xyxy, nome_formatado.replace("normal", ""), "verde"))
-                                self._registrar_amostra_conformidade(id_setor, track_id, True)
-                            
-                            else:
-                                overlay_caixas.append(("box", coordenadas_xyxy, nome_formatado, "verde"))
-                                self._registrar_amostra_conformidade(id_setor, track_id, True)
-
-                            alerta_epi_registrado = True
-
-                    # Regras para quando a detecção é de pessoa
-                    if nome_rotulo == "pessoa":
-                        if not self._zona_requer_classe(zona.epis_categoria, "pessoa", zona.permitido):
-                            pessoa_em_zona_restrita = True
-                            self._disparar_alerta_epi(zona, "Pessoa em zona restrita", track_id, 3)
-                        else:
-                            pessoa_em_zona_permitida = True
-
-                # Decisão do overlay de pessoa
-                if nome_rotulo == "pessoa":
-                    if pessoa_em_zona_restrita:
-                        overlay_caixas.append(("box", coordenadas_xyxy, nome_formatado, "vermelho"))
-                    elif pessoa_em_zona_permitida:
-                        overlay_caixas.append(("box", coordenadas_xyxy, nome_formatado, "ciano"))
+                    if not self._zona_requer_classe(zona.epis_categoria, "pessoa", zona.permitido):
+                        em_zona_restrita = True
+                        self._disparar_alerta_epi(zona, "Pessoa em zona restrita", pessoa["track_id"], 3)
                     else:
-                        overlay_caixas.append(("box", coordenadas_xyxy, nome_formatado, "branco"))     
-               
-                contagem_classes[nome_rotulo] += 1
+                        em_zona_permitida = True
 
-                if zonas_do_objeto:
+                pessoa["zonas"] = zonas_da_pessoa
+                pessoa["epis_por_classe"] = {}
+                pessoa["tem_violacao_epi"] = False
+
+                cor_pessoa = "vermelho" if em_zona_restrita else ("ciano" if em_zona_permitida else "branco")
+                pessoa["cor_overlay"] = cor_pessoa
+                pessoa["label_overlay"] = "Pessoa"
+                
+                deteccoes.append({
+                    "id": pessoa["track_id"],
+                    "label": "pessoa",
+                    "confidence": pessoa["conf"],
+                    "zona": zonas_da_pessoa[0].id if zonas_da_pessoa else None,
+                })
+
+            for epi in epis_detectados:
+                classe_epi = self._classe_epi_por_label(epi["rotulo"])
+                nome_formatado = epi["rotulo"].capitalize().replace("_", " ")
+
+                # Encontra a pessoa com maior sobreposição para este EPI (mínimo de 35% de IoA)
+                pessoa_dona = None
+                melhor_score = 0.35
+
+                for pessoa in pessoas_detectadas:
+                    score = self.epi_pertence_a_pessoa(epi["xyxy"], pessoa["xyxy"])
+                    if score > melhor_score:
+                        melhor_score = score
+                        pessoa_dona = pessoa
+
+                # Se o EPI não pertence a ninguém em uma zona monitorada, ignora alertas
+                if pessoa_dona is None or not pessoa_dona["zonas"] or not classe_epi:
+                    overlay_caixas.append(("box", epi["xyxy"], nome_formatado, "cinza"))
                     deteccoes.append({
-                        "id": track_id,
-                        "label": nome_rotulo,
-                        "confidence": conf,
-                        "zona": zonas_do_objeto[0],
-                    })
-                else:
-                    deteccoes.append({
-                        "id": track_id,
-                        "label": nome_rotulo,
-                        "confidence": conf,
+                        "id": epi["track_id"],
+                        "label": epi["rotulo"],
+                        "confidence": epi["conf"],
                         "zona": None,
                     })
+                    continue
+
+                # Registra que esta classe de EPI foi vista na pessoa (priorizando estados de violação se houver conflito)
+                rotulo_anterior = pessoa_dona["epis_por_classe"].get(classe_epi)
+                if not rotulo_anterior or epi["rotulo"].startswith("sem_") or epi["rotulo"].endswith("_chapeu"):
+                    pessoa_dona["epis_por_classe"][classe_epi] = epi["rotulo"]
+
+                # Usa o track_id da PESSOA para evitar spam por perda de tracking do EPI pequeno
+                id_referencia = pessoa_dona["track_id"]
+                alerta_epi_registrado = False
+                zonas_do_epi = []
+
+                # Verifica se a pessoa está em alguma zona que exige o EPI detectado
+                for zona in pessoa_dona["zonas"]:
+                    if not self._zona_requer_classe(zona.epis_categoria, classe_epi, zona.permitido):
+                        continue
+
+                    zonas_do_epi.append(zona)
+                    id_setor = self._obter_id_setor_da_zona(zona.id)
+                    nome_rotulo = epi["rotulo"]
+
+                    # Limpa o timer de ausência pois a classe foi explicitamente detectada
+                    self._avaliar_epi_ausente(camera_id, id_referencia, zona, classe_epi, ausente=False)
+
+                    # Verifica se a pessoa está usando o EPI correto ou se está sem EPI
+                    if not alerta_epi_registrado:
+                        if nome_rotulo.startswith("sem_"):
+                            overlay_caixas.append(("box", epi["xyxy"], nome_formatado, "vermelho"))
+                            self._disparar_alerta_epi(zona, f"Sem EPI necessário: {classe_epi}", id_referencia, 2)
+                            self._registrar_amostra_conformidade(id_setor, id_referencia, False)
+                            pessoa_dona["tem_violacao_epi"] = True
+                        
+                        elif nome_rotulo.endswith("_chapeu"):
+                            overlay_caixas.append(("box", epi["xyxy"], nome_formatado, "amarelo"))
+                            self._disparar_alerta_epi(zona, f"Equipamento inadequado: {classe_epi}", id_referencia, 1)
+                            self._registrar_amostra_conformidade(id_setor, id_referencia, False)
+                            pessoa_dona["tem_violacao_epi"] = True
+                        
+                        elif nome_rotulo.endswith("_normal"):
+                            overlay_caixas.append(("box", epi["xyxy"], nome_formatado.replace("normal", ""), "verde"))
+                            self._registrar_amostra_conformidade(id_setor, id_referencia, True)
+                        
+                        else:
+                            overlay_caixas.append(("box", epi["xyxy"], nome_formatado, "verde"))
+                            self._registrar_amostra_conformidade(id_setor, id_referencia, True)
+
+                        alerta_epi_registrado = True
+
+                # Se a pessoa está em uma zona, mas aquela zona especifica não exige a EPI, apenas desenha em cinza
+                if not alerta_epi_registrado:
+                    overlay_caixas.append(("box", epi["xyxy"], nome_formatado, "cinza"))
+
+                deteccoes.append({
+                    "id": epi["track_id"],
+                    "label": epi["rotulo"],
+                    "confidence": epi["conf"],
+                    "zona": zonas_do_epi[0].id if zonas_do_epi else None,
+                })
+
+            for pessoa in pessoas_detectadas:
+                id_referencia = pessoa["track_id"]
+                epis_faltantes_confirmados = []
+
+                for zona in pessoa["zonas"]:
+                    if not zona.epis_categoria:
+                        continue
+
+                    id_setor = self._obter_id_setor_da_zona(zona.id)
+
+                    for categoria in zona.epis_categoria:
+                        classe_requerida = self._classe_epi_por_label(categoria) or str(categoria).strip().lower()
+
+                        if classe_requerida == "pessoa":
+                            continue
+
+                        # Se a classe exigida não foi detectada de nenhuma forma (nem com_*, nem sem_*)
+                        esta_ausente = classe_requerida not in pessoa["epis_por_classe"]
+                        confirmado = self._avaliar_epi_ausente(
+                            camera_id, id_referencia, zona, classe_requerida, ausente=esta_ausente
+                        )
+
+                        if confirmado:
+                            epis_faltantes_confirmados.append(classe_requerida)
+                            pessoa["tem_violacao_epi"] = True
+                            self._disparar_alerta_epi(zona, f"Sem EPI necessário: {classe_requerida}", id_referencia, 2)
+                            self._registrar_amostra_conformidade(id_setor, id_referencia, False)
+
+                    if epis_faltantes_confirmados:
+                        faltantes_str = ", ".join(epis_faltantes_confirmados)
+                        pessoa["cor_overlay"] = "vermelho"
+                        pessoa["label_overlay"] = f"Sem EPI: {faltantes_str}"
+                    elif pessoa["tem_violacao_epi"]:
+                        pessoa["cor_overlay"] = "vermelho"
+
+                    overlay_caixas.append(("box", pessoa["xyxy"], pessoa["label_overlay"], pessoa["cor_overlay"]))
 
         return deteccoes, contagem_classes, overlay_caixas
 
