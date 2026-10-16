@@ -85,3 +85,33 @@ class VisaoGeometriaMixin:
         # Executa a checagem
         distancia = cv2.pointPolygonTest(contorno, (pe_x, pe_y), measureDist=False)
         return distancia >= 0
+
+    def epi_pertence_a_pessoa(self, caixa_epi: tuple, caixa_pessoa: tuple) -> float:
+        """
+            Retorna um score de associação (0.0 a 1.0) entre um EPI e uma pessoa.
+            Considera uma margem extra de 10% no topo da pessoa para acomodar capacetes.
+        """
+        ex1, ey1, ex2, ey2 = caixa_epi
+        px1, py1, px2, py2 = caixa_pessoa
+
+        altura_pessoa = max(1.0, py2 - py1)
+        largura_pessoa = max(1.0, px2 - px1)
+
+        # Expande levemente o topo (capacete) e as laterais (luvas)
+        py1_exp = py1 - int(0.12 * altura_pessoa)
+        px1_exp = px1 - int(0.08 * largura_pessoa)
+        px2_exp = px2 + int(0.08 * largura_pessoa)
+
+        # Calcula a interseção entre a caixa do EPI e a caixa expandida da pessoa
+        inter_x1 = max(ex1, px1_exp)
+        inter_y1 = max(ey1, py1_exp)
+        inter_x2 = min(ex2, px2_exp)
+        inter_y2 = min(ey2, py2)
+
+        if inter_x2 <= inter_x1 or inter_y2 <= inter_y1:
+            return 0.0  # Sem interseção
+
+        area_intersecao = (inter_x2 - inter_x1) * (inter_y2 - inter_y1)
+        area_epi = max(1.0, (ex2 - ex1) * (ey2 - ey1))
+
+        return area_intersecao / area_epi
