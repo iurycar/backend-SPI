@@ -33,13 +33,13 @@ INSERT INTO cameras (nome, ip, id_setor, rotacao, espelhar_horizontal, espelhar_
 
 
 -- 5. POPULAR TABELA ZONAS (Depende de cameras)
--- Coordenadas simuladas (x, y, largura, altura)
-INSERT INTO zonas (nome, x, y, largura, altura, permitido, id_camera) VALUES
-('Fresa 1',   				0,  0, 	1, 	1, 	TRUE,  	1), -- Zona 1 (CAM 1) (Setor 1)
-('Fresa 2',   				0,  0, 	1, 	1, 	TRUE,  	1), -- Zona 2 (CAM 2) (Setor 1)
-('Fresa 2',     			0,  0, 	1, 	1, 	TRUE,  	2), -- Zona 3 (CAM 2) (Setor 2)
-('Sala 4',    				0,  0, 	1, 	1, 	TRUE,  	3), -- Zona 4 (CAM 3) (Setor 3)
-('SICK Visionary-B Two',    0, 	0, 	1, 	1, 	TRUE,   4); -- Zona 5 (CAM 4) (Setor 4)
+-- Coordenadas normalizadas dos vértices: [[x1, y1], [x2, y2], [x3, y3], [x4, y4]]
+INSERT INTO zonas (nome, poligono, permitido, id_camera) VALUES
+('Fresa 1',              '[[0.2068, 0.0053], [0.2039, 0.9909], [0.918, 0.9909], [0.9194, 0.0233]]', TRUE, 1), -- Zona 1 (CAM 1) (Setor 1)
+('Fresa 2',              '[[0.2068, 0.0053], [0.2039, 0.9909], [0.918, 0.9909], [0.9194, 0.0233]]', TRUE, 1), -- Zona 2 (CAM 1) (Setor 1)
+('Fresa 3',              '[[0.2068, 0.0053], [0.2039, 0.9909], [0.918, 0.9909], [0.9194, 0.0233]]', TRUE, 2), -- Zona 3 (CAM 2) (Setor 2)
+('Sala 4',               '[[0.2068, 0.0053], [0.2039, 0.9909], [0.918, 0.9909], [0.9194, 0.0233]]', TRUE, 3), -- Zona 4 (CAM 3) (Setor 3)
+('SICK Visionary-B Two', '[[0.2068, 0.0053], [0.2039, 0.9909], [0.918, 0.9909], [0.9194, 0.0233]]', TRUE, 4); -- Zona 5 (CAM 4) (Setor 4)
 
 
 -- 6. POPULAR TABELA EPIS

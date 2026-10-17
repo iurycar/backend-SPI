@@ -66,22 +66,9 @@ CREATE TABLE cameras (
 CREATE TABLE zonas (
     id_zona         INTEGER      	GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     nome            VARCHAR(40)  	NOT NULL DEFAULT 'Nome não definido',
-    x               NUMERIC(6, 5)   NOT NULL,
-    y               NUMERIC(6, 5)   NOT NULL,
-    largura         NUMERIC(6, 5)   NOT NULL,
-    altura          NUMERIC(6, 5)   NOT NULL,
+    poligono        JSONB        	NOT NULL DEFAULT '[]'::jsonb,
     permitido       BOOLEAN      	NOT NULL DEFAULT TRUE,
     id_camera       INTEGER      	NOT NULL REFERENCES cameras(id_camera) ON DELETE CASCADE
-
-	-- Garante valores normalizados entre 0 e 1
-	CONSTRAINT chk_zonas_limites CHECK (
-        x >= 0.0 AND x <= 1.0 AND
-        y >= 0.0 AND y <= 1.0 AND
-        largura > 0.0 AND largura <= 1.0 AND
-        altura > 0.0 AND altura <= 1.0 AND
-        (x + largura) <= 1.0 AND
-        (y + altura) <= 1.0
-    )
 );
 
 

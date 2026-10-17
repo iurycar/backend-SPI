@@ -769,7 +769,13 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
                 pessoa["epis_por_classe"] = {}
                 pessoa["tem_violacao_epi"] = False
 
-                cor_pessoa = "vermelho" if em_zona_restrita else ("ciano" if em_zona_permitida else "branco")
+                if em_zona_restrita:
+                    cor_pessoa = "vermelho"
+                elif em_zona_permitida:
+                    cor_pessoa = "ciano"
+                else:
+                    cor_pessoa = "branco"
+
                 pessoa["cor_overlay"] = cor_pessoa
                 pessoa["label_overlay"] = "Pessoa"
                 
@@ -890,14 +896,14 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
                             self._disparar_alerta_epi(zona, f"Sem EPI necessário: {classe_requerida}", id_referencia, 2)
                             self._registrar_amostra_conformidade(id_setor, id_referencia, False)
 
-                    if epis_faltantes_confirmados:
-                        faltantes_str = ", ".join(epis_faltantes_confirmados)
-                        pessoa["cor_overlay"] = "vermelho"
-                        pessoa["label_overlay"] = f"Sem EPI: {faltantes_str}"
-                    elif pessoa["tem_violacao_epi"]:
-                        pessoa["cor_overlay"] = "vermelho"
+                if epis_faltantes_confirmados:
+                    faltantes_str = ", ".join(epis_faltantes_confirmados)
+                    pessoa["cor_overlay"] = "vermelho"
+                    pessoa["label_overlay"] = f"Sem EPI: {faltantes_str}"
+                elif pessoa["tem_violacao_epi"]:
+                    pessoa["cor_overlay"] = "vermelho"
 
-                    overlay_caixas.append(("box", pessoa["xyxy"], pessoa["label_overlay"], pessoa["cor_overlay"]))
+                overlay_caixas.append(("box", pessoa["xyxy"], pessoa["label_overlay"], pessoa["cor_overlay"]))
 
         return deteccoes, contagem_classes, overlay_caixas
 
