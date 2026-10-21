@@ -5,6 +5,8 @@ import math
 """
 
 class VisaoPosturaMixin:
+    LIMIAR_CONF_KEYPOINT = 0.5  # Confiança mínima para considerar o ponto visível
+
     def _avaliar_postura(self, metodo: str, **kargs):
         """
             Avalia a postura combinando ângulo de inclinação do tronco, rotação axial e verificação de queda.
@@ -116,14 +118,39 @@ class VisaoPosturaMixin:
             if proporcao > LIMITE_QUEDA and angulo_horizontal_coluna <= 35.0 and not is_agachado:
                 is_ma_postura = True
                 motivo = "Pessoa caída no chão."
+                
 
             centro_x = int((min_x + max_x) / 2)
             centro_y = int((min_y + max_y) / 2)
             return is_ma_postura, motivo, (centro_x, centro_y), (centro_x, centro_y)
 
-        return False, "", (0, 0), (0, 0)
+        elif metodo == "agachado":
+            ombro_esq = kargs.get("ombro_esq")
+            ombro_dir = kargs.get("ombro_dir")
+            quadril_esq = kargs.get("quadril_esq")
+            quadril_dir = kargs.get("quadril_dir")
+            joelho_esq = kargs.get("joelho_esq")
+            joelho_dir = kargs.get("joelho_dir")
+            tornozelo_esq = kargs.get("tornozelo_esq")
+            tornozelo_dir = kargs.get("tornozelo_dir")
 
-    LIMIAR_CONF_KEYPOINT = 0.5  # Confiança mínima para considerar o ponto visível
+            if any(ponto is None for ponto in (joelho_esq, joelho_dir, tornozelo_esq, tornozelo_dir)):
+                return is_ma_postura, motivo, (0, 0), (0, 0)
+
+            pontos_pernas_validos = [
+                ponto[1] for ponto in [joelho_esq, joelho_dir, tornozelo_esq, tornozelo_dir]
+                if ponto is not None and ponto[0] > 0 and ponto[1] > 0
+            ]
+
+            if len(pontos_pernas_validos) >= 2:
+                media_y_pernas = sum(pontos_pernas_validos) / len(pontos_pernas_validos)
+                if media_y_pernas < min(joelho_esq[1], joelho_dir[1]):
+                    is_ma_postura = True
+                    motivo = "Pessoa agachada."
+
+            return is_ma_postura, motivo, (0, 0), (0, 0)
+
+        return False, "", (0, 0), (0, 0)
 
     def _ponto_valido(self, ponto: tuple[float, float], conf: float) -> bool:
         """Verifica se o ponto possui coordenadas reais e confiança mínima aceitável."""
@@ -205,8 +232,32 @@ class VisaoPosturaMixin:
             tipo_deteccao="queda",
             motivo=motivo_queda if queda else "Em pé",
             ativo=queda,
-            tempo_limite_segundos=3,
+            tempo_limite_segundos=2,
             severidade=3,
         )
+
+        agachado, motivo_agachado, _, _ = self._avaliar_postura(
+            "agachado",
+            ombro_esq=ombro_esq,
+            ombro_dir=ombro_dir,
+            quadril_esq=quadril_esq,
+            quadril_dir=quadril_dir,
+            joelho_esq=joelho_esq,
+            joelho_dir=joelho_dir,
+            tornozelo_esq=tornozelo_esq,
+            tornozelo_dir=tornozelo_dir,
+        )
+
+        self._monitorar_tempo_postura(
+            camera_id=camera_id,
+            track_id=track_id,
+            tipo_deteccao="agachado",
+            motivo=motivo_agachado if agachado else "Em pé",
+            ativo=agachado,
+            tempo_limite_segundos=5,
+            severidade=1,
+        )
+
+
 
         return ma_postura, motivo, pt_ombro, pt_quadril, cor_coluna

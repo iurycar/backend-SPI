@@ -1,5 +1,4 @@
 import paho.mqtt.publish as publish
-import sys 
 import os
 
 BROKER_ADDRESS = os.environ.get("BROKER_ADDRESS", "localhost")  # Endereço do broker MQTT
