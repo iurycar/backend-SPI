@@ -325,6 +325,9 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
         if classe == "pessoa" and permitido:
             return True
 
+        if permitido == False:
+            return False
+
         if not categorias_permitidas:
             return False
 

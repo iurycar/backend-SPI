@@ -258,6 +258,4 @@ class VisaoPosturaMixin:
             severidade=1,
         )
 
-
-
         return ma_postura, motivo, pt_ombro, pt_quadril, cor_coluna
