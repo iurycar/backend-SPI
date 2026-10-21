@@ -770,7 +770,7 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
                 pessoa["tem_violacao_epi"] = False
 
                 if em_zona_restrita:
-                    cor_pessoa = "vermelho"
+                    cor_pessoa = "roxo ultravioleta"
                 elif em_zona_permitida:
                     cor_pessoa = "ciano"
                 else:
@@ -802,8 +802,8 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
 
                 # Se o EPI não pertence a ninguém em uma zona monitorada, ignora alertas
                 if pessoa_dona is None or not pessoa_dona["zonas"] or not classe_epi:
-                    #overlay_caixas.append(("box", epi["xyxy"], nome_formatado, "cinza"))
-                    """deteccoes.append({
+                    """#overlay_caixas.append(("box", epi["xyxy"], nome_formatado, "cinza"))
+                    deteccoes.append({
                         "id": epi["track_id"],
                         "label": epi["rotulo"],
                         "confidence": epi["conf"],
