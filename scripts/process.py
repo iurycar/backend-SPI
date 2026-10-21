@@ -37,7 +37,7 @@ if not os.path.exists(LABELS_DIR):
 IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 LABELS_DIR.mkdir(parents=True, exist_ok=True)
 
-FRAME_STRIDE = 30     # Pular frames: 1 = salva todos; 15 = salva 1 a cada 15 frames
+FRAME_STRIDE = 15     # Pular frames: 1 = salva todos; 15 = salva 1 a cada 15 frames
 CONF_THRESHOLD = 0.5  # Limiar de confiança mínimo
 DEVICE = "cuda"
 
@@ -125,7 +125,7 @@ def processar_video(
 
 
 
-def process_images(images_path: str = "assets/modelo/active_learning/dataset", output_path: str = "assets/modelo/active_learning/dataset_captura"):
+def process_images(images_path: str = "assets/modelo/active_learning/dataset", output_path: str = "assets/modelo/active_learning/dataset_captura", target_classes: list[int] = None):
     print(f"\nProcessando imagens em: {images_path} ...\n")
     model.predict(
         source=images_path,
@@ -135,6 +135,7 @@ def process_images(images_path: str = "assets/modelo/active_learning/dataset", o
         project=output_path,
         name="dataset",
         exist_ok=True,
+        classes=target_classes,
         device=DEVICE
     )
     print("\nProcessamento de imagens concluído!\n")
@@ -161,8 +162,18 @@ def menu():
         elif entrada == "2":
             folder_path = str(input("\nDigite o caminho da pasta de imagens (ex: assets/modelo/active_learning/dataset): ")).strip()
             output_folder = str(input("\nDigite o caminho da pasta de saída (padrão: assets/modelo/active_learning/dataset_captura): ")).strip()
-            
-            process_images(images_path=folder_path, output_path=output_folder)
+            target_classes = input("\nDigite os IDs das classes desejadas (ex: 0 1 2), digite 'N' para não filtrar: ").strip().split()
+
+            if target_classes[0].strip().upper() == 'N':
+                target_classes = None
+            else:
+                try:
+                    target_classes = [int(x) for x in target_classes]
+                except ValueError:
+                    print(f"\n[AVISO] Você digitou {target_classes}.")
+                    continue
+                
+            process_images(images_path=folder_path, output_path=output_folder, target_classes=target_classes)
 
         elif entrada == "0":
             print("\nEncerrando o programa.")
