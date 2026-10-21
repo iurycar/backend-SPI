@@ -16,7 +16,8 @@ class VisaoDesenhoMixin:
         "magenta": (255, 0, 255),
         "cinza": (120, 120, 120),
         "branco": (255, 255, 255),
-        "roxo ultravioleta": (230, 20, 140)
+        "roxo ultravioleta": (230, 20, 140),
+        "laranja": (0, 165, 255),
     }
 
     ESQUELETO_CONEXOES = [
