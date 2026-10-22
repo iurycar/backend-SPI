@@ -589,24 +589,27 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
         chave = (camera_id, track_id, tipo_deteccao)
         agora = time.monotonic()
 
+        registro = self._postura_inicio.get(chave)
+
         # Chaves de controle no Redis para monitorar o tempo de postura e se o alerta já foi emitido
         if not ativo:
-            self._postura_inicio.pop(chave, None)
-            self._postura_emitido.pop(chave, None)
+            if registro is not None and (agora - registro[1]) > 1.0:
+                self._postura_inicio.pop(chave, None)
+                self._postura_emitido.pop(chave, None)
             return
 
-        registro = self._postura_inicio.get(chave)
-        if registro is None or (agora - registro[1]) > 60.0:
+        if registro is None or (agora - registro[1]) > 1.0:
             registro = [agora, agora]
             self._postura_inicio[chave] = registro
-        registro[1] = agora
+        else:
+            registro[1] = agora
 
         if self._postura_emitido.get(chave, 0.0) > agora:
             return
 
         tempo_decorrido = agora - registro[0]
         if tempo_decorrido >= tempo_limite_segundos:
-            self._postura_emitido[chave] = agora + 45.0 # Marca como emitido com tempo de recarga (ex: 45s) para não disparar alertas repetidos
+            self._postura_emitido[chave] = agora + 30.0 # Marca como emitido com tempo de recarga (ex: 45s) para não disparar alertas repetidos
             self._executar_em_segundo_plano(
                 self._emitir_alerta_postura, camera_id, track_id, tipo_deteccao, motivo, severidade, tempo_decorrido
             )
@@ -839,7 +842,7 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
                     # Verifica se a pessoa está usando o EPI correto ou se está sem EPI
                     if not alerta_epi_registrado:
                         if nome_rotulo.startswith("sem_"):
-                            overlay_caixas.append(("box", epi["xyxy"], nome_formatado, "vermelho"))
+                            overlay_caixas.append(("box", epi["xyxy"], nome_formatado, "laranja"))
                             self._disparar_alerta_epi(zona, f"Sem EPI necessário: {classe_epi}", id_referencia, 2)
                             self._registrar_amostra_conformidade(id_setor, id_referencia, False)
                             pessoa_dona["tem_violacao_epi"] = True
@@ -910,8 +913,9 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
 
         return deteccoes, contagem_classes, overlay_caixas
 
-    def _estimar_pose_frame(self, camera_id: int, frame) -> list[dict]:
+    def _estimar_pose_frame(self, camera_id: int, frame, zonas=None) -> list[dict]:
         pessoas = []
+        altura, largura = frame.shape[:2]
 
         resultado, trilhas = self._predizer_com_rastreamento(
             self.modelo_pose, "pose", camera_id, frame, self.POSE_IMGSZ, self.POSE_CONF
@@ -921,6 +925,9 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
             if resultado.keypoints is None or len(trilhas) == 0:
                 return pessoas
 
+            zonas_ativas = zonas if zonas is not None else self._zonas_de_monitoramento(camera_id)
+            geometria = self._obter_geometria_zonas(camera_id, largura, altura, zonas_ativas)
+
             keypoints_todas = resultado.keypoints.xy.cpu().numpy()
             confiancas_todas = (
                 resultado.keypoints.conf.cpu().numpy()
@@ -929,6 +936,7 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
             )
 
             for idx_linha, linha in enumerate(trilhas):
+                x1, y1, x2, y2 = int(linha[0]), int(linha[1]), int(linha[2]), int(linha[3])
                 indice_det = int(linha[7]) if len(linha) >= 8 else idx_linha
                 track_id = int(linha[4])
 
@@ -945,16 +953,28 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
                 if len(pontos) < 17:
                     continue
 
+                # Verifica se a pessoa está dentro de uma zona de monitoramento
+                xyxy_pessoa = (x1, y1, x2, y2)
+                em_zona = any(
+                    self.objeto_intersecta_poligono(xyxy_pessoa, poligono_pixels)
+                    for zona, poligono_pixels in geometria
+                )
+
                 # Repassa pontos e suas respectivas confianças para a avaliação
-                ma_postura, motivo, pt_ombro, pt_quadril, cor_coluna = self._validar_e_avaliar_postura(
+                ma_postura, motivo, pt_ombro, pt_quadril, cor_esqueleto = self.validar_e_avaliar_postura(
                     camera_id=camera_id,
                     track_id=track_id,
                     pontos=pontos,
-                    confs=confs
+                    confs=confs,
+                    em_zona=em_zona
                 )
 
                 coluna = (pt_ombro, pt_quadril) if pt_ombro and pt_quadril else None
-                pessoas.append({"pontos": pontos, "confs": confs, "coluna": coluna, "cor": cor_coluna})
+                pessoas.append({
+                    "pontos": pontos, 
+                    "confs": confs, 
+                    "coluna": coluna, 
+                    "cor": cor_esqueleto})
 
         return pessoas
     # endregion
@@ -984,7 +1004,7 @@ class VisaoService(VisaoDesenhoMixin, VisaoPosturaMixin, VisaoGeometriaMixin):
             inicio_pose = time.perf_counter()
 
             with self.profiler.etapa("total.postura"):
-                overlay_pose = self._estimar_pose_frame(camera_id, frame)
+                overlay_pose = self._estimar_pose_frame(camera_id, frame, zonas)
 
             duracao = time.perf_counter() - inicio_pose
 
