@@ -121,7 +121,7 @@ CREATE TABLE alertas (
     tipo_deteccao   VARCHAR(20)  NOT NULL DEFAULT 'epi',
     id_camera       INTEGER      REFERENCES cameras(id_camera) ON DELETE CASCADE,
     CONSTRAINT chk_alertas_tipo_deteccao CHECK (
-        tipo_deteccao IN ('epi', 'postura_tronco', 'postura_rotacao', 'queda', 'legado')
+        tipo_deteccao IN ('epi', 'postura_tronco', 'postura_rotacao', 'queda', 'agachado', 'legado')
     ),
     CONSTRAINT chk_alertas_vinculo CHECK (
         (tipo_deteccao IN ('epi', 'legado') AND id_monitorar IS NOT NULL AND id_camera IS NULL)
