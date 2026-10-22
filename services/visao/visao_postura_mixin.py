@@ -173,10 +173,6 @@ class VisaoPosturaMixin:
             dy_coluna = abs(pt_quadril[1] - pt_ombro[1])
             angulo_horizontal_coluna = math.degrees(math.atan2(dy_coluna, max(dx_coluna, 1)))
 
-            is_agachado = self._verificar_agachamento_geometrico(
-                pt_ombro, pt_quadril, quadril_esq, quadril_dir, joelho_esq, joelho_dir, tornozelo_esq, tornozelo_dir
-            )
-
             joelhos_validos = [joelho for joelho in (joelho_esq, joelho_dir) if joelho is not None]
             tornozelos_validos = [tornozelo for tornozelo in (tornozelo_esq, tornozelo_dir) if tornozelo is not None]
 
@@ -189,21 +185,29 @@ class VisaoPosturaMixin:
             razao_altura_corpo = altura_total / largura_ombros
             razao_tronco = altura_tronco / largura_ombros
 
-            # Queda horizontal (atravessada/de lado na câmera)
-            queda_horizontal = (proporcao > 1.20 and angulo_horizontal_coluna <= 35.0)
-
             # Identifica se as pernas estão de fato sustentando o corpo em pé (ambas as partes da perna estendidas)
             pernas_verticais_em_pe = (
                 tornozelos_validos and
-                dy_pernas > (largura_ombros * 1.75) and
-                dy_canela > (largura_ombros * 0.75)
+                dy_pernas > (largura_ombros * 1.6) and
+                dy_canela > (largura_ombros * 0.7)
             )
+
+            is_agachado = False
+            if dy_tronco > (largura_ombros * 0.4):
+                is_agachado = self._verificar_agachamento_geometrico(
+                    pt_ombro, pt_quadril, quadril_esq, quadril_dir, joelho_esq, joelho_dir, tornozelo_esq, tornozelo_dir
+                )
+
+            # Queda horizontal (atravessada/de lado na câmera)
+            queda_horizontal = (proporcao > 1.20 and angulo_horizontal_coluna <= 35.0)
 
             # Queda invertida: ombros no chão abaixo do quadril
             queda_vertical_invertida = (
-                pt_ombro[1] >= (pt_quadril[1] - largura_ombros * 0.15) and
-                not pernas_verticais_em_pe and
-                not is_agachado
+                not pernas_verticais_em_pe and 
+                (
+                    pt_ombro[1] >= (pt_quadril[1] - largura_ombros * 0.35) or  # Ombros abaixo ou no mesmo nível
+                    (dy_tronco < (largura_ombros * 0.45) and razao_altura_corpo < 2.5)  # Forte compressão de cabeça para a frente
+                )
             )
 
             # Queda com os pés voltados para a câmera (longitudinal com escorço no chão)
