@@ -1,6 +1,6 @@
 """Tipos persistidos e filtros de alertas, independentes do texto do evento."""
 
-TIPOS_POSTURA = ('postura_tronco', 'postura_rotacao', 'queda')
+TIPOS_POSTURA = ('postura_tronco', 'postura_rotacao', 'queda', 'agachado')
 TIPOS_CRIACAO = ('epi', *TIPOS_POSTURA)
 TIPOS_FILTRO = (*TIPOS_CRIACAO, 'legado', 'postura')
 
