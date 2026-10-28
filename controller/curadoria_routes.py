@@ -1,4 +1,4 @@
-from flask import Blueprint, current_app, jsonify, request, render_template, send_file, session
+from flask import Blueprint, current_app, jsonify, request, render_template, send_file
 from services.curadoria_service import CuradoriaService
 from core.auth import login_required, perfil_required
 from schemas.config_dto import ConfigDTO
