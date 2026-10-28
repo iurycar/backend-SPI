@@ -48,7 +48,9 @@ assets/config.yaml
 yolov8n.pt
 yolov8m-pose.pt
 yolov8s-pose.pt
-assets/modelo/treinamento/runs/
+assets/modelo/treinamento/runs/train
+assets/modelo/treinamento/runs/train2
+assets/modelo/treinamento/runs/train3
 best_openvino_model
 yolov8m-pose_openvino_model
 revalidado
